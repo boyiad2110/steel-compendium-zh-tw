@@ -73,9 +73,9 @@ sections:
       - rule/
       - religion/
       - project/
-      # Beastheart companion stat blocks (feature-group/companion/*) — each has
-      # its own scc code + permalink stub; referenced from the beastheart class.
-      - feature-group/
+      # Beastheart companion stat blocks (monster/companion/beastheart/*) arrive
+      # through this include — each has its own scc code + permalink stub;
+      # referenced from the beastheart class.
       - monster/
       - dynamic-terrain/
       - retainer/
