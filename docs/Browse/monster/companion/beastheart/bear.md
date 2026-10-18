@@ -1,11 +1,28 @@
 ---
 printing: "1.0"
 printing_book: "The Beastheart"
+agility: 1
 companion: bear
-level: "1"
+free_strike: 1 + M
+intuition: 2
+keywords:
+    - Animal
+    - Companion
+level: 1
+might: 2
+movement: Climb
 name: Bear
+organization: Companion
+presence: 2
+reason: -1
 scc: mcdm.beastheart.v1/monster.companion.beastheart.statblock/bear
-type: feature-group
+size: 1L
+skills:
+    - Intimidate
+speed: 5
+stability: 2
+stamina: = yours
+type: statblock
 ---
 
 # Bear

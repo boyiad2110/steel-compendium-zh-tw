@@ -1,11 +1,29 @@
 ---
 printing: "1.0"
 printing_book: "The Beastheart"
+agility: 1
 companion: basilisk
-level: "1"
+free_strike: 1 + M
+immunities:
+    - Poison 3
+intuition: 2
+keywords:
+    - Beast
+    - Companion
+level: 1
+might: 2
 name: Basilisk
+organization: Companion
+presence: 2
+reason: -1
 scc: mcdm.beastheart.v1/monster.companion.beastheart.statblock/basilisk
-type: feature-group
+size: 1L
+skills:
+    - Alertness
+speed: 5
+stability: 2
+stamina: = yours
+type: statblock
 ---
 
 # Basilisk

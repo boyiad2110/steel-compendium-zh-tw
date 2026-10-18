@@ -1,11 +1,28 @@
 ---
 printing: "1.0"
 printing_book: "The Beastheart"
+agility: 2
 companion: spider
-level: "1"
+free_strike: 1 + M
+intuition: 2
+keywords:
+    - Animal
+    - Companion
+level: 1
+might: 2
+movement: Climb
 name: Spider
+organization: Companion
+presence: 1
+reason: -1
 scc: mcdm.beastheart.v1/monster.companion.beastheart.statblock/spider
-type: feature-group
+size: 1M
+skills:
+    - Sneak
+speed: 5
+stability: 1
+stamina: = yours
+type: statblock
 ---
 
 # Spider

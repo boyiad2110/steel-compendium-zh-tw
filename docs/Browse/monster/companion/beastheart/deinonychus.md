@@ -1,11 +1,27 @@
 ---
 printing: "1.0"
 printing_book: "The Beastheart"
+agility: 2
 companion: deinonychus
-level: "1"
+free_strike: 1 + M
+intuition: 2
+keywords:
+    - Animal
+    - Companion
+level: 1
+might: 2
 name: Deinonychus
+organization: Companion
+presence: 1
+reason: -1
 scc: mcdm.beastheart.v1/monster.companion.beastheart.statblock/deinonychus
-type: feature-group
+size: 1M
+skills:
+    - Track
+speed: 7
+stability: 1
+stamina: = yours
+type: statblock
 ---
 
 # Deinonychus

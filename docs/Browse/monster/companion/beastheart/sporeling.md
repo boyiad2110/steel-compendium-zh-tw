@@ -1,11 +1,29 @@
 ---
 printing: "1.0"
 printing_book: "The Beastheart"
+agility: 2
 companion: sporeling
-level: "1"
+free_strike: 1 + M
+immunities:
+    - Poison 3
+intuition: 2
+keywords:
+    - Beast
+    - Companion
+level: 1
+might: 2
 name: Sporeling
+organization: Companion
+presence: 1
+reason: -1
 scc: mcdm.beastheart.v1/monster.companion.beastheart.statblock/sporeling
-type: feature-group
+size: 1S
+skills:
+    - Track
+speed: 5
+stability: 0
+stamina: = yours
+type: statblock
 ---
 
 # Sporeling

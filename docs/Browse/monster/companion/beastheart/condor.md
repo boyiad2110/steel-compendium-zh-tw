@@ -1,11 +1,28 @@
 ---
 printing: "1.0"
 printing_book: "The Beastheart"
+agility: 1
 companion: condor
-level: "1"
+free_strike: 1 + M
+intuition: 2
+keywords:
+    - Animal
+    - Companion
+level: 1
+might: 2
+movement: Fly
 name: Condor
+organization: Companion
+presence: 1
+reason: -1
 scc: mcdm.beastheart.v1/monster.companion.beastheart.statblock/condor
-type: feature-group
+size: 1M
+skills:
+    - Alertness
+speed: 7
+stability: 0
+stamina: = yours
+type: statblock
 ---
 
 # Condor
