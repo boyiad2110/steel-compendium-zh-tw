@@ -50,9 +50,11 @@ $env:SC_SITE_URL = 'https://boyiad2110.github.io/steel-compendium-zh-tw/'
 
 ## 分支與整合
 
-`develop` 是 GitHub 預設分支，也是本站中文化工作的整合目標。使用者已指定後續中文化變更推送或合併到此分支，不預設推送到 `main`。
+`develop` 是 GitHub 預設分支，也是本站中文化工作的整合目標；每個批次都必須透過 PR 合併，不直接將批次內容推送到 `develop`，不預設推送到 `main`。
 
-一般批次可在 `develop` 工作；需要隔離變更時，從 `develop` 建立 `codex/` 分支，完成後合併回 `develop`。上游同步 PR 也以 `develop` 為目標。推送／合併與本地人工驗收、網站部署是不同動作，仍遵守 [工作流程](workflow.md)。
+每批從最新 `develop` 建立 `codex/` 工作分支，在該分支實作並推送，建立目標為 `develop` 的 Draft PR。使用者明確驗收通過後，補上紀錄、確認最新 PR 檢查通過，再轉為可審查並合併，最後更新本地 `develop`。上游同步與純文件批次也適用，修改意見維持在同一 PR。詳細步驟見 [工作流程](workflow.md)。
+
+目前未新增 GitHub 分支保護或自動辨識驗收的機制；執行者依本流程管理，不能宣稱已程式封鎖直接推送。
 
 ## CI 的實際行為
 
