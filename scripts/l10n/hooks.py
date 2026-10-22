@@ -106,8 +106,8 @@ def on_page_content(html, page, config, files):
             if found:
                 labels[key] = found[0]
         if uri == "Browse/feature/index.md":
-            # The upstream feature browser builds human trait cards from a JSON
-            # island, so attach this scoped batch's approved display text and costs
+            # The upstream feature browser builds reviewed ancestry cards from a JSON
+            # island, so attach these batches' approved display text and costs
             # without changing the generated Markdown source or machine values.
             for island in soup.select("script.sc-browse-data"):
                 try:
@@ -118,12 +118,12 @@ def on_page_content(html, page, config, files):
                     continue
                 for item in items:
                     href = str(item.get("href", ""))
-                    match = re.fullmatch(r"trait/human/([a-z0-9-]+)/?", href)
+                    match = re.fullmatch(r"trait/(human|devil)/([a-z0-9-]+)/?", href)
                     if not match:
                         continue
-                    slug = match.group(1)
-                    item_uri = f"Browse/feature/trait/human/{slug}.md"
-                    item_scc = f"mcdm.heroes.v1/feature.trait.human/{slug}"
+                    ancestry, slug = match.groups()
+                    item_uri = f"Browse/feature/trait/{ancestry}/{slug}.md"
+                    item_scc = f"mcdm.heroes.v1/feature.trait.{ancestry}/{slug}"
                     name = item.get("name", "")
                     translated_name, _ = catalog.lookup_label(name, item_uri, item_scc)
                     if translated_name:
@@ -132,13 +132,16 @@ def on_page_content(html, page, config, files):
                     translated_flavor = catalog.lookup(flavor, item_uri, item_scc)
                     if translated_flavor:
                         labels[normalized(flavor).casefold()] = translated_flavor[0]
-                    if slug == "detect-the-supernatural":
+                    if (ancestry, slug) in {("human", "detect-the-supernatural"), ("devil", "silver-tongue")}:
                         item["tag"] = "Signature Trait"
+                        signature, _ = catalog.lookup_label(item["tag"], item_uri, item_scc)
+                        if signature:
+                            labels[normalized(item["tag"]).casefold()] = signature[0]
                     else:
-                        source_path = ROOT / "docs" / "Browse" / "feature" / "trait" / "human" / f"{slug}.md"
+                        source_path = ROOT / "docs" / "Browse" / "feature" / "trait" / ancestry / f"{slug}.md"
                         if source_path.is_file():
                             frontmatter = source_path.read_text(encoding="utf-8").split("---", 2)
-                            if len(frontmatter) == 3 and re.search(r"^ancestry:\s*human\s*$", frontmatter[1], re.MULTILINE):
+                            if len(frontmatter) == 3 and re.search(rf"^ancestry:\s*{ancestry}\s*$", frontmatter[1], re.MULTILINE):
                                 cost = re.search(r"^cost:\s*[\"']?([^\"'\r\n]+?)[\"']?\s*$", frontmatter[1], re.MULTILINE)
                                 if cost:
                                     item["tag"] = cost.group(1).strip()

@@ -17,6 +17,44 @@ def row(source, target, kind="strings", scope="heroes", status="APPROVED", id="t
 
 
 class LocalizationTests(unittest.TestCase):
+    def test_devil_story_real_sources_keep_approved_prose_breaks_and_links(self):
+        import markdown
+        import re
+        from collections import Counter
+        root = Path(__file__).resolve().parents[1]
+        cat = Catalog(load_catalog())
+        expected = {r['id']: r for r in cat.data['records'] if '.devil.on-devils.' in r['id']}
+        self.assertEqual(len(expected), 47)
+        for uri in ['Browse/ancestry/devil.md', 'Read/heroes/ancestries.md']:
+            source = (root / 'docs' / uri).read_text(encoding='utf8')
+            story = re.split(r'^#{2,3} On Devils[^\n]*\n\n', source, maxsplit=1, flags=re.M)[1]
+            story = re.split(r'^#{2,3} Devil Traits[^\n]*\n', story, maxsplit=1, flags=re.M)[0]
+            rendered = markdown.markdown('## On Devils\n\n' + story)
+            html, hits = cat.translate_html(rendered, uri)
+            soup = BeautifulSoup(html, 'lxml')
+            self.assertEqual(set(expected), {h['record'] for h in hits if h['state'] == 'translated'})
+            self.assertFalse(soup.select('p p,p hr,h2 p'))
+            self.assertEqual(Counter(a['href'] for a in soup.select('a[href]')),
+                             Counter(a['href'] for a in BeautifulSoup(rendered, 'lxml').select('a[href]')))
+            for rid, record in expected.items():
+                if rid.endswith('paragraph.45'):
+                    continue
+                target = record['target']
+                if rid.endswith('paragraph.44'):
+                    target += expected[rid[:-2] + '45']['target']
+                actual = ''.join(n.get_text() for n in soup.select(f'[data-sc-l10n="{rid}"]'))
+                compact = lambda text: re.sub(r'\s', '', text)
+                self.assertEqual(compact(actual), compact(BeautifulSoup(markdown.markdown(target), 'lxml').get_text()))
+            self.assertIsNotNone(soup.select_one('hr[data-sc-l10n$="paragraph.28"]'))
+            changed, _ = cat.translate_html(rendered.replace('outrageous sums', 'modest sums'), uri)
+            changed_soup = BeautifulSoup(changed, 'lxml')
+            self.assertIn('modest sums', changed_soup.get_text())
+            self.assertFalse(changed_soup.select('[data-sc-l10n-records$="paragraph.45"]'))
+            again, again_hits = cat.translate_html(html, uri)
+            self.assertEqual([str(n) for n in BeautifulSoup(again, 'lxml').select('h2,p,hr')],
+                             [str(n) for n in soup.select('h2,p,hr')])
+            self.assertEqual(again_hits, [])
+
     def test_approved_on_humans_story_all_paragraphs_and_narrative_links(self):
         import markdown
         root = Path(__file__).resolve().parents[1]
