@@ -38,7 +38,7 @@
 
 ## 工程與驗證
 
-- 完整程式驗證入口：`.venv\Scripts\python.exe scripts/l10n/verify.py`。依變更補足實際瀏覽器驗證；純治理文件變更檢查連結、路徑與規則一致性即可。
+- 完整程式驗證入口：`.venv\Scripts\python.exe scripts/l10n/verify.py`。依變更補足實際瀏覽器驗證；純治理文件使用 `scripts/ci/check.py docs` 及 CI 測試，不需全站建置。CI 依整個 PR 差異分類，未知、網站內容、CI 本身或手動執行仍做完整驗證；詳見 development。
 - 客戶端掛載使用 Material `document$`，保持冪等並清理監聽器；不能只依賴 `DOMContentLoaded`。本地預覽也要實測站內即時導覽。
 - 不讓翻譯後文字進入原本的解析或數值計算；保留原值。共用翻譯對應必須涵蓋閱讀頁、瀏覽頁、卡片、搜尋及適用匯出。
 - 只報告實際執行的驗證與限制。不得將自動報告的候選頁數或中文區塊比例當作 1 級創角完成率。
