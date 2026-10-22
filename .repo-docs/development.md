@@ -97,3 +97,14 @@ $env:SC_SITE_URL = 'https://boyiad2110.github.io/steel-compendium-zh-tw/'
 `site/`、`.work/`、`reports/`、`outputs/`、`.venv/` 及 `node_modules/` 為本地／生成資料。`reports/` 不納入 Git；需要長期保留的 QA 結論、限制、驗收證據及版本寫入 [批次紀錄](batches/README.md)。不要遞迴掃描或修改工具安裝目錄、依賴 junction 或其他專案。
 
 上游版本更新先核對 [upstream.json](../l10n/upstream.json)，在 `codex/` 分支整理同步 PR、文字差異、過期譯文及失效對應，再驗證受影響內容。一般本地預覽不需要取得 `steel-etl` 或重新生成上游規則。
+
+## 驗收預覽與畫面交付檢查
+
+- 每批記錄單一驗收 URL、服務命令、PID／埠號、建置 commit 與建置時間。啟動前確認目標埠是否已占用；若已存在服務，先核對程序命令及來源，只停止已確認屬本批且應替換的程序，不依埠號盲目終止。
+- 修改 Python hooks 後重啟 MkDocs；若使用固定 `site/` 預覽，記錄其建置版本，不把目前 Git HEAD 當成產物版本。交付前直接請求實際 URL，確認 HTTP 成功且回應含本次指定修正，再用瀏覽器確認。HTTP 200 本身不能證明版本正確。
+- 臨時替代埠只作診斷，交付前回到單一入口並清理本批多餘服務。預覽逾時先查監聽程序與回應，不先要求使用者調整防火牆／代理；畫面仍舊時先查程序與產物版本。
+- 適用的主頁內嵌、章節、獨立頁、動態卡片分別檢查。文字存在之外，確認 heading 不含巢狀段落、標題與成本對齊、首字完整、偏好設定及即時導覽有效；視覺問題對照原英文 DOM 與 computed style，避免只用 CSS 掩蓋結構錯誤。
+- 匯出截斷等問題比較中英文原站與相同操作條件，記錄是否為上游既有、中文新增或尚無法判斷，以及受影響範圍與處置。未修復限制不得報為已修復。
+- 收尾以最新 PR head 的實際 Actions check-run／結論及 run URL 為證；statuses 或 runs 查詢為空時交叉核對 GitHub CLI／Actions，無法確認就不合併。
+
+以上為人工執行與紀錄要求，未新增自動預覽版本驗證或視覺測試工具；案例見 [B01 檢討](b01-retrospective.md)。
