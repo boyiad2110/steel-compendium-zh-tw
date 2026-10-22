@@ -244,6 +244,15 @@ class Catalog:
                 continue
             quote = all(not line.strip() or line.startswith(">") for line in part.splitlines())
             body = "\n".join(re.sub(r"^> ?", "", line) for line in part.splitlines()) if quote else part
+            if any(line.lstrip().startswith("|") for line in body.splitlines()):
+                # Keep table syntax, values and destinations intact. Translate only
+                # complete linked labels, using the same scoped approved catalog.
+                def linked_label(match):
+                    found = self.lookup(plain(match[1]), uri, scc, label=True)
+                    return f"[{found[0]}]({match[2]})" if found else match[0]
+                body = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", linked_label, body)
+                output.append("\n".join("> " + line if line else ">" for line in body.splitlines()) if quote else body)
+                continue
             rendered = markdown.markdown(body, extensions=["tables"])
             translated, hits = self.translate_html(rendered, uri, scc)
             if any(hit["state"] == "translated" for hit in hits):

@@ -89,6 +89,12 @@ class LocalizationTests(unittest.TestCase):
         self.assertIn("> 你獲得[自然](nature/)技能。", result)
         self.assertIn("> 12 damage", result)
 
+    def test_export_table_labels_match_visible_card_without_changing_numbers(self):
+        records = [row("Melee", "近戰", "glossary")]
+        source = "| **[Melee](melee/)** | 12 damage |\n|---|---|"
+        result = Catalog({"records": records}).translate_markdown(source, "Browse/feature/ability/fury/level-1/brutal-slam.md")
+        self.assertEqual(result, "| **[近戰](melee/)** | 12 damage |\n|---|---|")
+
 
 if __name__ == "__main__":
     unittest.main()

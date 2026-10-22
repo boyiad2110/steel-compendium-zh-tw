@@ -25,6 +25,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.repository == 'SteelCompendium/v2'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

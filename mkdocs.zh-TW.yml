@@ -1,6 +1,7 @@
 INHERIT: mkdocs.yml
 site_name: Steel Compendium 正體中文版
 site_description: Draw Steel Heroes 玩家與創角規則參考。核准譯文逐步上線，尚未核准內容保留英文。
+copyright: 'Steel Compendium 正體中文版 is an independent product published under the DRAW STEEL Creator License and is not affiliated with MCDM Productions, LLC. DRAW STEEL © 2026 MCDM Productions, LLC.'
 site_url: !ENV [SC_SITE_URL, 'http://127.0.0.1:8000/']
 site_dir: site
 theme:
