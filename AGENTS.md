@@ -1,5 +1,14 @@
 # Steel Compendium v2
 
+## 正體中文分叉
+
+- 使用繁體中文與台灣用語回覆。先讀 `README.zh-TW.md`。
+- 優先 P0 基礎、P1 Heroes 所有職業 1 級創角；其他頁面與功能保留英文。
+- 中文設定使用 `mkdocs.zh-TW.yml`。不要修改生成的 Browse／Read／scc 檔案。
+- 只有 `l10n/catalog.json` 的 APPROVED 譯文可發布；不得自行核准草稿。Book Master 變更先比對，獨立 Master 不被自動覆寫。
+- `python scripts/l10n/verify.py` 為完整驗證入口。工程接線、譯文核准與畫面驗收分開追蹤。
+- 上游 `DESIGN.md` 位於 https://github.com/SteelCompendium/workspace/blob/main/DESIGN.md；中文版只加入必要中文字型支援。
+
 MkDocs Material site for the Draw Steel TTRPG rules reference at steelcompendium.io/v2.
 
 ## Key Rules

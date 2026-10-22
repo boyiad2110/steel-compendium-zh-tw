@@ -1,0 +1,5 @@
+mkdocs-material==9.7.6
+mkdocs-roamlinks-plugin==0.3.2
+mkdocs-awesome-nav==3.3.0
+beautifulsoup4==4.15.0
+lxml==6.1.3

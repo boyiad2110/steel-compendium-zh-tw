@@ -56,6 +56,8 @@
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
     });
   }
+  // Display-only lookup. Item IDs, facet values and source JSON stay English.
+  function display(s) { return window.SCL10n ? window.SCL10n.label(s) : s; }
   // minimal **bold** for distance values ("Melee **1**")
   function md(s) { return esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>"); }
   function ordinal(n) { return n + (["th", "st", "nd", "rd"][(n % 100 - 20) % 10] || ["th", "st", "nd", "rd"][n % 100] || "th"); }
@@ -88,7 +90,7 @@
         '<span class="sc-crest sc-prev__crest"><span class="sc-prev__glyph">' + esc(ACTIONS.trait.glyph) + '</span></span>' +
         '<div class="sc-prev__titles">' +
           '<div class="sc-prev__eyebrow"><span class="sc-prev__dia"></span>' + eyebrow + '</div>' +
-          '<h3 class="sc-prev__name">' + esc(it.name) + '</h3></div>' + tag + '</div>' +
+          '<h3 class="sc-prev__name">' + esc(display(it.name)) + '</h3></div>' + tag + '</div>' +
       (it.flavor ? '<div class="sc-prev__flavor">' + esc(it.flavor) + '</div>' : "") +
       foot + '</a>';
   }
@@ -105,9 +107,9 @@
     // shows on its face why it matched. Mirrors renderAbilityPrev in
     // steel-etl/internal/site/feature_index.go; keep the two in step.
     var chips = (it.keywords || []).map(function (k) {
-      return '<span class="sc-prev__chip">' + esc(k) + '</span>';
+      return '<span class="sc-prev__chip">' + esc(display(k)) + '</span>';
     }).concat((it.conditions || []).map(function (c) {
-      return '<span class="sc-prev__chip sc-prev__chip--cond">' + esc(c) + '</span>';
+      return '<span class="sc-prev__chip sc-prev__chip--cond">' + esc(display(c)) + '</span>';
     }));
     var kw = chips.length ? '<div class="sc-prev__kw">' + chips.join("") + '</div>' : "";
     var foot = [];
@@ -117,13 +119,13 @@
     var footHTML = foot.length ? '<div class="sc-prev__foot">' + foot.join("") + "</div>" : "";
     // Subclass rides the action eyebrow ("Maneuver · Black Ash"), matching the
     // trait card — abilities otherwise never surface their subclass.
-    var eyebrow = esc(a.label) + (it.subclass ? " · " + esc(it.subclass) : "");
+    var eyebrow = esc(display(a.label)) + (it.subclass ? " · " + esc(display(it.subclass)) : "");
     return '<a class="sc-prev sc-prev--ability sc-fil" data-action="' + esc(act) + '" href="' + esc(it.href || "#") + '">' +
       '<div class="sc-prev__head">' +
         '<span class="sc-crest sc-prev__crest"><span class="sc-prev__glyph">' + esc(a.glyph) + '</span></span>' +
         '<div class="sc-prev__titles">' +
           '<div class="sc-prev__eyebrow"><span class="sc-prev__dia"></span>' + eyebrow + '</div>' +
-          '<h3 class="sc-prev__name">' + esc(it.name) + '</h3></div>' + tag + '</div>' +
+          '<h3 class="sc-prev__name">' + esc(display(it.name)) + '</h3></div>' + tag + '</div>' +
       (it.flavor ? '<div class="sc-prev__flavor">' + esc(it.flavor) + '</div>' : "") +
       kw + footHTML + '</a>';
   }
@@ -267,7 +269,7 @@
 
     function matches(it) {
       if (state.q) {
-        var hay = (it.name + " " + (it.flavor || "") + " " + (it.keywords || []).join(" ")).toLowerCase();
+        var hay = (it.name + " " + display(it.name) + " " + (it.flavor || "") + " " + (it.keywords || []).join(" ") + " " + (it.keywords || []).map(display).join(" ")).toLowerCase();
         if (hay.indexOf(state.q) === -1) return false;
       }
       for (var k in state.sel) {

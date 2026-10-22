@@ -44,7 +44,12 @@
     return t;
   }
 
-  function splitWords(s) { return String(s || "").split(TOKEN_RE).filter(Boolean); }
+  // Deterministic CJK character tokens: partial Chinese queries work without
+  // depending on Intl.Segmenter's dictionary/version. English tokens stay intact.
+  function splitWords(s) {
+    return String(s || "").replace(/([\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}])/gu, " $1 ")
+      .split(TOKEN_RE).filter(Boolean);
+  }
 
   function tokenize(s) { return splitWords(stripTags(s)).map(processTerm); }
 
@@ -84,11 +89,15 @@
   // s that processTerm strips, the last term is a prefix. Single-letter terms
   // ("Muse's" → "s") are not highlighted.
   function markRe(terms) {
-    var parts = terms.filter(function (t) { return t.length > 1; }).map(function (t, i, arr) {
+    var cjk = terms.filter(function (t) { return /\p{Script=Han}/u.test(t); }).map(escapeRe);
+    var parts = terms.filter(function (t) { return t.length > 1 && !/\p{Script=Han}/u.test(t); }).map(function (t, i, arr) {
       var e = escapeRe(t);
       return i === arr.length - 1 ? e + "\\w*" : e + "s?";
     });
-    return parts.length ? new RegExp("\\b(" + parts.join("|") + ")", "giu") : null;
+    var patterns = [];
+    if (parts.length) patterns.push("\\b(?:" + parts.join("|") + ")");
+    if (cjk.length) patterns.push(cjk.join("|"));
+    return patterns.length ? new RegExp("(" + patterns.join("|") + ")", "giu") : null;
   }
 
   function highlight(s, terms) {
@@ -110,15 +119,16 @@
     var byLocation = new Map();
     var records = docs.map(function (d, i) {
       byLocation.set(d.location, d);
-      return { id: i, location: d.location, title: stripTags(d.title), text: stripTags(d.text), boost: d.boost || 1 };
+      return { id: i, location: d.location, title: stripTags(d.title),
+        aliases: (d.aliases || []).join(" "), text: stripTags(d.text), boost: d.boost || 1 };
     });
     var ms = new MiniSearch({
-      fields: ["title", "text"],
+      fields: ["title", "aliases", "text"],
       storeFields: ["location", "boost"],
       tokenize: splitWords,
       processTerm: processTerm,
       searchOptions: {
-        boost: { title: TITLE_BOOST, text: 1 },
+        boost: { title: TITLE_BOOST, aliases: TITLE_BOOST, text: 1 },
         prefix: function (_term, i, terms) { return i === terms.length - 1; },
         // steel-etl stamps a page's frontmatter `search.boost` onto every doc
         // chunk it emits for that page, including each heading anchor. Honor
@@ -166,7 +176,7 @@
           location: d.location,
           title: d.location === page ? pageTitle(page, highlight(stripTags(d.title), terms)) : highlight(stripTags(d.title), terms),
           text: snippet(d.text, terms),
-          score: h.score * titleTier(d.title, query),
+          score: h.score * Math.max(titleTier(d.title, query), ...((d.aliases || []).map(function (a) { return titleTier(a, query); }))),
           terms: termsMap
         });
       });

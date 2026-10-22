@@ -1,0 +1,55 @@
+name: zh-TW checks and deployment
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      site_url:
+        description: '中文版正式 URL（含結尾 /），例如 https://example.github.io/steel-compendium-zh-tw/'
+        required: true
+        type: string
+      deploy:
+        description: Deploy verified build to GitHub Pages
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: zh-tw-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      SC_SITE_URL: ${{ inputs.site_url || 'http://127.0.0.1:8000/' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: pip install -r requirements.lock.txt
+      - run: python scripts/l10n/verify.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: localization-reports
+          path: reports/
+      - uses: actions/upload-pages-artifact@v3
+        if: inputs.deploy
+        with:
+          path: site
+  deploy:
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

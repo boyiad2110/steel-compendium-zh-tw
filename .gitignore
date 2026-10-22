@@ -4,6 +4,13 @@
 .venv/
 .devbox/
 site/
+**/node_modules/
+__pycache__/
+.work/
+outputs/
+reports/
+.*-log.txt
+*.pyc
 
 # SC-320: licensed Playtype web fonts (Berlingske Slab). NEVER commit these — this repo
 # is public and the EULA forbids making the font files downloadable anywhere but the

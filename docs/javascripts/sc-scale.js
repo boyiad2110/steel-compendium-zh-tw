@@ -9,7 +9,9 @@
  * instant-nav safe: document$-driven, idempotent. */
 (function () {
   "use strict";
-  function txt(el) { return el ? el.textContent.trim() : ""; }
+  function txt(el) {
+    return el ? (window.SCL10n ? window.SCL10n.original(el) : el.textContent).trim() : "";
+  }
 
   function init() {
     const S = window.SCScale;

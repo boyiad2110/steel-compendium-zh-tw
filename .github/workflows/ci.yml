@@ -1,9 +1,8 @@
 name: ci
 
+# Upstream recipe retained for reference; Chinese releases use zh-tw.yml.
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 # Deploys through GitHub's Pages artifact (upload-pages-artifact + deploy-pages). The
 # licensed Berlingske Slab web fonts are NOT part of this build: the root site

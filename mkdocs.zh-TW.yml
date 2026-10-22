@@ -1,0 +1,20 @@
+INHERIT: mkdocs.yml
+site_name: Steel Compendium 正體中文版
+site_description: Draw Steel Heroes 玩家與創角規則參考。核准譯文逐步上線，尚未核准內容保留英文。
+site_url: !ENV [SC_SITE_URL, 'http://127.0.0.1:8000/']
+site_dir: site
+theme:
+  language: zh-TW
+  font: false
+hooks:
+  - scripts/l10n/hooks.py
+# All generated links are explicit Markdown links. The unused roamlinks plugin
+# scans the entire docs tree for every basename link (minutes per page on Windows).
+# Removing it also preserves the original, already-resolved link destinations.
+plugins:
+  - search
+  - awesome-nav
+extra:
+  homepage: !ENV [SC_SITE_URL, 'http://127.0.0.1:8000/']
+  analytics: null
+  bug_report_url: ''

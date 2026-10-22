@@ -1,0 +1,9 @@
+/* Keep upstream roles, sizes, colours and grids; add licensed CJK fallbacks only. */
+@import url("fonts/noto-sans-tc.css");
+:root {
+  --md-text-font: "Zilla Slab", "Noto Sans TC", serif;
+  --md-large-header-font: "Cinzel", "Noto Sans TC", serif;
+  --md-small-header-font: "Petrona", "Noto Sans TC", serif;
+}
+html[lang="zh-TW"] .md-typeset { line-break: strict; }
+html[lang="zh-TW"] .sc-head__slot { overflow-wrap: anywhere; }
