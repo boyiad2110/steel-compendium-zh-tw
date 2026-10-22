@@ -8,10 +8,10 @@
   "master": {
     "spreadsheetId": "1RvYstzyZWqQfXDPnTwQUscSd-UJZK6uCFEOVg0Q931c",
     "url": "https://docs.google.com/spreadsheets/d/1RvYstzyZWqQfXDPnTwQUscSd-UJZK6uCFEOVg0Q931c/edit",
-    "approvedRecords": 1668,
+    "approvedRecords": 1671,
     "bookVersion": "1.01b",
     "readbackVerified": true,
-    "modifiedTime": "2026-10-22T02:12:20.840Z"
+    "modifiedTime": "2026-10-22T05:13:53.378Z"
   },
   "records": [
     {
@@ -25033,6 +25033,51 @@
       "sourceHash": "dea81e3acd8c7878f849d6aa7d1ba283c39ccb8a51f2d93d63978218194ab132",
       "scope": "heroes",
       "approvalBasis": "Book Master APPROVED; exact source and scoped rendered-text match required"
+    },
+    {
+      "id": "ui.signature-trait",
+      "kind": "ui",
+      "source": "Signature Trait",
+      "target": "招牌特性",
+      "status": "APPROVED",
+      "scope": "ancestry:human",
+      "sourceHash": "d0895794138eac10ad919e1fd106080e0d9c99ef497a0ef86bce6d27bf41f7c6",
+      "sourceRecordId": "",
+      "sourceSheetId": "",
+      "reference": "Steel Compendium UI — B01; user-approved 2026-10-22",
+      "bookVersion": "",
+      "context": "User-approved wording for the human signature trait label.",
+      "approvalBasis": "Independent Master APPROVED"
+    },
+    {
+      "id": "ui.human-feature-cost.1-point",
+      "kind": "ui",
+      "source": "1 Point",
+      "target": "1 費",
+      "status": "APPROVED",
+      "scope": "ancestry:human",
+      "sourceHash": "7e1196f4df34036bf592738e5464543e846e5ec69f8bf7601fc6f5a6402e173d",
+      "sourceRecordId": "",
+      "sourceSheetId": "",
+      "reference": "Steel Compendium UI — B01; user-approved 2026-10-22",
+      "bookVersion": "",
+      "context": "Human purchased-trait cost label.",
+      "approvalBasis": "Independent Master APPROVED"
+    },
+    {
+      "id": "ui.human-feature-cost.2-points",
+      "kind": "ui",
+      "source": "2 Points",
+      "target": "2 費",
+      "status": "APPROVED",
+      "scope": "ancestry:human",
+      "sourceHash": "21e25800e95a108f70e05ea03dd1ad4e892ad556c6508ebcd6e60d7bf9084d6c",
+      "sourceRecordId": "",
+      "sourceSheetId": "",
+      "reference": "Steel Compendium UI — B01; user-approved 2026-10-22",
+      "bookVersion": "",
+      "context": "Human purchased-trait cost label.",
+      "approvalBasis": "Independent Master APPROVED"
     }
   ]
 }

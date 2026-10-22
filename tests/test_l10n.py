@@ -76,6 +76,111 @@ class LocalizationTests(unittest.TestCase):
         self.assertIn(">Nature</a>", html)
         self.assertTrue(any(x["state"] == "link-adaptation-required" for x in hits))
 
+    def test_approved_path_labels_adapt_inflected_links_exactly(self):
+        source = "If you are force moved, some conditions require tests."
+        target = "若你被強制移動，某些狀態需要進行考驗。"
+        records = [
+            row(source, target, scope="ancestry:human"),
+            row("Forced Movement", "強制移動", "glossary", id="forced-movement"),
+            row("Condition", "狀態", "glossary", id="condition"),
+            row("Test", "考驗", "glossary", id="test"),
+        ]
+        cat = Catalog({"records": records})
+        html, hits = cat.translate_html(
+            '<p>If you are <a href="../../movement/forced-movement/">force moved</a>, '
+            'some <a href="../../rule/combat/condition/">conditions</a> require '
+            '<a href="../../rule/test/test/">tests</a>.</p>',
+            "Browse/feature/trait/human/perseverance.md",
+        )
+        soup = BeautifulSoup(html, "html.parser")
+        self.assertEqual([a.get_text() for a in soup.select("a")], ["強制移動", "狀態", "考驗"])
+        self.assertEqual([a["href"] for a in soup.select("a")], [
+            "../../movement/forced-movement/", "../../rule/combat/condition/", "../../rule/test/test/"
+        ])
+        self.assertTrue(any(x["state"] == "translated" for x in hits))
+
+    def test_human_forced_movement_distance_link_uses_contextual_distance(self):
+        source = "Your connection to the natural world allows you to resist certain supernatural effects. You ignore temporary difficult terrain created by magic and psionic abilities. Additionally, when you are force moved by a magic or psionic ability, you can reduce the forced movement distance by 1."
+        target = "你與大自然的連結能讓你抵抗某些超常效果。你可以無視魔法或靈能招式所創造的臨時困難地形。此外，當你被魔法或靈能招式強制移動時，你可以將強制移動的距離 -1。"
+        records = [
+            row(source, target, scope="ancestry:human", id="heroes.ancestries.human.trait.cant-take-hold.effect"),
+            row("Supernatural", "超常", "glossary", id="supernatural"),
+            row("Difficult Terrain", "困難地形", "glossary", id="difficult-terrain"),
+            row("Forced Movement", "強制移動", "glossary", id="forced-movement"),
+            row("Distance", "射程", "glossary", id="distance"),
+        ]
+        cat = Catalog({"records": records})
+        html, hits = cat.translate_html(
+            '<p>Your connection to the natural world allows you to resist certain '
+            '<a href="../../../../rule/general/supernatural/">supernatural</a> effects. '
+            'You ignore temporary <a href="../../../../movement/difficult-terrain/">difficult terrain</a> '
+            'created by magic and psionic abilities. Additionally, when you are '
+            '<a href="../../../../movement/forced-movement/">force moved</a> by a magic or psionic ability, '
+            'you can reduce the <a href="../../../../movement/forced-movement/">forced movement</a> '
+            '<a href="../../../../rule/combat/distance/">distance</a> by 1.</p>',
+            "Browse/feature/trait/human/cant-take-hold.md",
+        )
+        soup = BeautifulSoup(html, "html.parser")
+        distance = soup.find("a", href="../../../../rule/combat/distance/")
+        self.assertIsNotNone(distance)
+        self.assertEqual(distance.get_text(), "距離")
+        self.assertIn("強制移動的", soup.p.get_text())
+        self.assertTrue(any(hit["record"] == "heroes.ancestries.human.trait.cant-take-hold.effect"
+                            and hit["state"] == "translated" for hit in hits))
+        exported = cat.translate_markdown(
+            "Your connection to the natural world allows you to resist certain "
+            "[supernatural](../../../rule/general/supernatural.md) effects. You ignore temporary "
+            "[difficult terrain](../../../movement/difficult-terrain.md) created by magic and psionic abilities. "
+            "Additionally, when you are [force moved](../../../movement/forced-movement.md) by a magic or psionic ability, "
+            "you can reduce the [forced movement](../../../movement/forced-movement.md) "
+            "[distance](../../../rule/combat/distance.md) by 1.",
+            "Browse/feature/trait/human/cant-take-hold.md",
+        )
+        self.assertIn("[距離](../../../rule/combat/distance.md)", exported)
+        self.assertNotIn("[distance]", exported)
+
+    def test_human_composite_header_and_quick_build_use_approved_parts(self):
+        records = [
+            row("Signature Trait", "招牌特性", "ui", scope="ancestry:human", id="signature"),
+            row("Detect the Supernatural", "偵測超常", "strings", scope="ancestry:human", id="detect"),
+            row("You have 3 ancestry points to spend on the following traits.",
+                "你有 3 點族裔點數，可以用來購買以下特性。", scope="ancestry:human", id="intro"),
+            row("Quick Build: Perseverance, Staying Power.", "速選：堅持不懈、續航力",
+                scope="ancestry:human", id="quick-build"),
+        ]
+        html, hits = Catalog({"records": records}).translate_html(
+            "<h3>Signature Trait: Detect the Supernatural</h3>"
+            "<p>You have 3 ancestry points to spend on the following traits. "
+            "(<em>Quick Build:</em> Perseverance, Staying Power.)</p>",
+            "Browse/ancestry/human.md",
+        )
+        soup = BeautifulSoup(html, "html.parser")
+        self.assertEqual(soup.h3.get_text(), "招牌特性：偵測超常")
+        self.assertEqual(soup.p.get_text(), "你有 3 點族裔點數，可以用來購買以下特性。（速選：堅持不懈、續航力）")
+        self.assertEqual(soup.p.em.get_text(), "速選：")
+        self.assertTrue(all(x["state"] == "translated" for x in hits))
+
+    def test_human_card_flavor_and_scoped_cost_label(self):
+        records = [
+            row("Giving up is for other people.", "你絕不輕言放棄。", scope="ancestry:human"),
+            row("1 Point", "1 費", "ui", scope="ancestry:human", id="human-cost"),
+            row("Resist the Unnatural", "抵抗異常", scope="ancestry:human", id="human-trait-name"),
+        ]
+        html, _ = Catalog({"records": records}).translate_html(
+            '<a><div class="sc-prev__tag">1 Point</div>'
+            '<div class="sc-prev__flavor">Giving up is for other people.</div></a>',
+            "Browse/feature/trait/human/index.md",
+        )
+        self.assertIn("1 費", html)
+        self.assertIn("你絕不輕言放棄。", html)
+        self.assertEqual(Catalog({"records": records}).lookup_label(
+            "Resist the Unnatural", "Browse/feature/trait/human/resist-the-unnatural.md"
+        )[0][0], "抵抗異常")
+        other, _ = Catalog({"records": records}).translate_html(
+            '<div class="sc-prev__tag">1 Point</div>', "Browse/feature/trait/dwarf/index.md"
+        )
+        self.assertIn("1 Point", other)
+
     def test_scope_and_level_priorities(self):
         self.assertEqual(classify("Browse/feature/ability/fury/level-1/back.md", {"scc": "mcdm.heroes.v1/feature/a"}), "P1")
         self.assertEqual(classify("Browse/feature/ability/fury/level-10/a.md", {}), "P2")

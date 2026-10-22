@@ -1,5 +1,6 @@
 """MkDocs hook. Generated upstream sources remain byte-for-byte untouched."""
 import json
+import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -104,6 +105,47 @@ def on_page_content(html, page, config, files):
             found = catalog.lookup(key, uri, scc, label=True)
             if found:
                 labels[key] = found[0]
+        if uri == "Browse/feature/index.md":
+            # The upstream feature browser builds human trait cards from a JSON
+            # island, so attach this scoped batch's approved display text and costs
+            # without changing the generated Markdown source or machine values.
+            for island in soup.select("script.sc-browse-data"):
+                try:
+                    items = json.loads(island.string or island.get_text())
+                except (TypeError, json.JSONDecodeError):
+                    continue
+                if not isinstance(items, list):
+                    continue
+                for item in items:
+                    href = str(item.get("href", ""))
+                    match = re.fullmatch(r"trait/human/([a-z0-9-]+)/?", href)
+                    if not match:
+                        continue
+                    slug = match.group(1)
+                    item_uri = f"Browse/feature/trait/human/{slug}.md"
+                    item_scc = f"mcdm.heroes.v1/feature.trait.human/{slug}"
+                    name = item.get("name", "")
+                    translated_name, _ = catalog.lookup_label(name, item_uri, item_scc)
+                    if translated_name:
+                        labels[normalized(name).casefold()] = translated_name[0]
+                    flavor = item.get("flavor", "")
+                    translated_flavor = catalog.lookup(flavor, item_uri, item_scc)
+                    if translated_flavor:
+                        labels[normalized(flavor).casefold()] = translated_flavor[0]
+                    if slug == "detect-the-supernatural":
+                        item["tag"] = "Signature Trait"
+                    else:
+                        source_path = ROOT / "docs" / "Browse" / "feature" / "trait" / "human" / f"{slug}.md"
+                        if source_path.is_file():
+                            frontmatter = source_path.read_text(encoding="utf-8").split("---", 2)
+                            if len(frontmatter) == 3 and re.search(r"^ancestry:\s*human\s*$", frontmatter[1], re.MULTILINE):
+                                cost = re.search(r"^cost:\s*[\"']?([^\"'\r\n]+?)[\"']?\s*$", frontmatter[1], re.MULTILINE)
+                                if cost:
+                                    item["tag"] = cost.group(1).strip()
+                                    translated_cost, _ = catalog.lookup_label(item["tag"], item_uri, item_scc)
+                                    if translated_cost:
+                                        labels[normalized(item["tag"]).casefold()] = translated_cost[0]
+                island.string = json.dumps(items, ensure_ascii=False, separators=(",", ":"))
     island = soup.new_tag("template")
     island["id"] = "sc-l10n-labels"
     island["data-labels"] = json.dumps(labels, ensure_ascii=False, separators=(",", ":"))
