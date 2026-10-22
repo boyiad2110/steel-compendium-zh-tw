@@ -36,6 +36,12 @@ def normalized(value: str) -> str:
     return re.sub(r"\s+([.,;:!?])", r"\1", value)
 
 
+def typography_key(value: str) -> str:
+    """Typography-only equivalence for explicitly approved source adaptations."""
+    value = value.replace("\u201c", '"').replace("\u201d", '"').replace("\u2026", "...")
+    return normalized(re.sub(r"\s*—\s*", "—", value))
+
+
 def fingerprint(source: str) -> str:
     return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
@@ -139,11 +145,16 @@ class Catalog:
         self.data = data
         self.segments = defaultdict(list)
         self.labels = defaultdict(list)
+        self.typographic_segments = defaultdict(list)
         for record in data["records"]:
             if record["status"] != "APPROVED" or record.get("sourceHash") != fingerprint(record["source"]):
                 continue
             scope = record.get("scope") or record_scope(record)
             source, target = record["source"], record["target"]
+            # These Book introductions were explicitly approved for B01 by the
+            # user. Do not silently activate unrelated content in other batches.
+            if record["id"] in {"heroes.ancestries.human.description.1", "heroes.ancestries.human.description.2"}:
+                self.typographic_segments[typography_key(plain(source))].append((target, record["id"], scope))
             if record["kind"] in {"glossary", "names", "ui"}:
                 self.labels[normalized(plain(source)).casefold()].append((target, record["id"], scope))
                 continue
@@ -163,6 +174,8 @@ class Catalog:
     def lookup(self, source: str, uri: str, scc: str = "", label: bool = False):
         key = normalized(source)
         choices = (self.labels.get(key.casefold(), []) if label else self.segments.get(key, []))
+        if not choices and not label:
+            choices = self.typographic_segments.get(typography_key(source), [])
         allowed = [x for x in choices if scope_matches(x[2], uri, scc)]
         # Conflicting approved translations never resolve by arbitrary row order.
         targets = {x[0] for x in allowed}
@@ -348,6 +361,16 @@ class Catalog:
                     and text == "distance"
                     and link_path.endswith("/rule/combat/distance")):
                 translated = ("距離", "heroes.ancestries.human.trait.cant-take-hold.effect", "ancestry:human")
+            # User-approved Book wording in the human introduction. Rules use 超常.
+            if (record_id == "heroes.ancestries.human.description.1"
+                    and text.casefold() == "supernatural"
+                    and link_path.endswith("/rule/general/supernatural")):
+                translated = ("超自然", record_id, "ancestry:human")
+            if (record_id in {"heroes.ancestries.human.description.1", "heroes.ancestries.human.description.2"}
+                    and uri == "Browse/ancestry/human.md"
+                    and anchor["href"] in {".", "./"}
+                    and text.casefold() == "humans"):
+                translated = self.lookup("Human", uri, scc, label=True)
             if not translated:
                 # Some linked prose uses an inflected form ("conditions", "tests",
                 # "force moved"). Resolve only when the authored URL's exact final

@@ -17,6 +17,31 @@ def row(source, target, kind="strings", scope="heroes", status="APPROVED", id="t
 
 
 class LocalizationTests(unittest.TestCase):
+    def test_book_human_introduction_preserves_approved_text_and_links(self):
+        import markdown
+        root = Path(__file__).resolve().parents[1]
+        cat = Catalog(load_catalog())
+        source = (root / "docs/Browse/ancestry/human.md").read_text(encoding="utf-8")
+        paragraphs = source.split("\n\n")
+        intro = next(p for p in paragraphs if p.startswith("[Humans]"))
+        quote = next(p for p in paragraphs if p.startswith('"No one knows'))
+        rendered = markdown.markdown(intro + "\n\n" + quote)
+        result, hits = cat.translate_html(rendered, "Browse/ancestry/human.md")
+        soup = BeautifulSoup(result, "lxml")
+        records = {r["id"]: r for r in cat.data["records"]}
+        for i, p in enumerate(soup.select("p"), 1):
+            self.assertEqual(p.get_text(), records[f"heroes.ancestries.human.description.{i}"]["target"])
+        self.assertEqual([a["href"] for a in soup.select("a")],
+                         ["human.md", "../rule/general/supernatural.md", "dwarf.md", "orc.md", "human.md"])
+        self.assertEqual(soup.find("a", href="../rule/general/supernatural.md").get_text(), "超自然")
+        # MkDocs rewrites main-page self links to ./ before invoking the hook.
+        main_html, _ = cat.translate_html(rendered.replace('href="human.md"', 'href="./"'), "Browse/ancestry/human.md")
+        main = BeautifulSoup(main_html, "lxml")
+        self.assertEqual([p.get_text() for p in main.select("p")], [p.get_text() for p in soup.select("p")])
+        self.assertEqual([a.get_text() for a in main.select('a[href="./"]')], ["人類", "人類"])
+        changed, _ = cat.translate_html(rendered.replace("oily smell", "pleasant smell"), "Browse/ancestry/human.md")
+        self.assertIn("pleasant smell", changed)
+
     def test_public_catalog_rejects_drafts(self):
         data = json.dumps({"format": "steel-compendium-catalog/v1", "locale": "zh-TW",
                            "records": [row("Home", "首頁", "ui", status="DRAFT")]})
