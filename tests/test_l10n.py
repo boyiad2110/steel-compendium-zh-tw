@@ -17,6 +17,21 @@ def row(source, target, kind="strings", scope="heroes", status="APPROVED", id="t
 
 
 class LocalizationTests(unittest.TestCase):
+    def test_approved_on_humans_story_all_paragraphs_and_narrative_links(self):
+        import markdown
+        root = Path(__file__).resolve().parents[1]
+        cat = Catalog(load_catalog())
+        source = (root/'docs/Browse/ancestry/human.md').read_text(encoding='utf8').split('## On Humans\n\n')[1].split('\n\n## Human Traits')[0]
+        rendered = markdown.markdown(source).replace('href="human.md"','href="./"')
+        html, hits = cat.translate_html(rendered,'Browse/ancestry/human.md')
+        soup = BeautifulSoup(html,'lxml')
+        expected = {r['id']:r for r in cat.data['records'] if r['id'].startswith('heroes.ancestries.human.on-humans.paragraph.')}
+        self.assertEqual(len(soup.select('p[data-sc-l10n]')),17)
+        for p in soup.select('p[data-sc-l10n]'):
+            self.assertEqual(p.get_text(),expected[p['data-sc-l10n']]['target'])
+        self.assertEqual([a.get_text() for a in soup.select('a[href="../class/conduit.md"],a[href="../class/censor.md"],a[href="../class/shadow.md"]')],['使徒','懲戒惡徒者','行於陰影之人'])
+        self.assertFalse(any(h['state']=='link-adaptation-required' for h in hits))
+
     def test_book_human_introduction_preserves_approved_text_and_links(self):
         import markdown
         root = Path(__file__).resolve().parents[1]

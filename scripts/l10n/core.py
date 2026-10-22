@@ -371,6 +371,21 @@ class Catalog:
                     and anchor["href"] in {".", "./"}
                     and text.casefold() == "humans"):
                 translated = self.lookup("Human", uri, scc, label=True)
+            if record_id.startswith("heroes.ancestries.human.on-humans.paragraph."):
+                # Approved narrative wording is intentionally distinct from class
+                # and condition labels. Match only this record and authored link.
+                narrative = {"high elf": "高等精靈", "dying": "死亡", "conduits": "使徒", "saints": "聖者",
+                             "censors": "懲戒惡徒者", "shadows": "行於陰影之人"}
+                expected_paths = {"high elf": "/high-elf", "dying": "/rule/health/dying", "conduits": "/class/conduit",
+                                  "saints": "/rule/world/saint", "censors": "/class/censor",
+                                  "shadows": "/class/shadow"}
+                word = text.casefold()
+                if word in narrative and ("/" + link_path).endswith(expected_paths[word]):
+                    translated = (narrative[word], record_id, "ancestry:human")
+                if word in {"human", "humans"}:
+                    name = self.lookup("Human", uri, scc, label=True)
+                    label = name[0] if name and name[0] in target else "祖先"
+                    translated = (label, record_id, "ancestry:human")
             if not translated:
                 # Some linked prose uses an inflected form ("conditions", "tests",
                 # "force moved"). Resolve only when the authored URL's exact final
