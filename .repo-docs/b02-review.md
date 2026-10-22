@@ -1,6 +1,6 @@
 # B02 待審與缺譯清單
 
-僅供審閱，未核准內容不進 catalog 或網站。2026-10-23 查閱 SC Records A1:L1687、Book Strings A1:O1211：魔鬼 28 筆核准紀錄已在快照；Book 以「Ancestries / Devil」「On Devils」「Adelard」搜尋，未找到故事定稿。其後僅依使用者明確授權寫入 SC 的 4 項內容；Book 未寫入。
+未核准內容不進 catalog 或網站。初次盤點時故事缺譯；其後使用者提供定稿，明確授權同時寫 Book 與 SC，並確認四項修正及標題「談魔鬼」。故事現已收錄 Book Strings 第 1212–1258 列及 SC Records 第 1688–1734 列，47 筆均讀回相等；既有 UI／巧舌如簧適配仍僅寫 SC。直接引用規則缺譯仍列於下方。
 
 ## 已核准的新 UI（2026-10-23）
 
@@ -22,9 +22,9 @@
 
 使用者已明確核准上述本站適配，SC Records 第 558 列已更新並讀回；Book 定稿不覆寫。核准快照保留來源原文／雜湊與 Book ID，Context 記錄 SC 專用適配；所有原連結目的地保留。
 
-## On Devils 故事缺譯
+## On Devils 故事已核准（2026-10-23）
 
-標題候選：**談魔鬼**。以下按生成來源的段落列出，包含原書最後一段被拆行的接續句；原文連結保留供語境檢查。需要完整定稿或新譯核准，不能以 UI 核准代替故事核准。未進公開快照。共有 46 個來源段落。
+定稿標題：**談魔鬼**。使用者提供全文並確認：重新點燃原蠟燭、幾分鐘改為片刻、堤防改為提防、補回「我受權向您提供」。其餘文字保留。47 筆 ID 為 `heroes.ancestries.devil.on-devils.heading` 及 `.paragraph.01`–`.46`；來源 Heroes 1.01b。D25／40／41／46 保留中文對話換段，D28 保留場景分隔，D44–45 依來源分筆記錄但呈現時接成原定稿同一句。下列原文為核准對照歷史，已非待審清單。
 
 ### D01
 
@@ -230,7 +230,7 @@ She blushed in spite of herself and raised her own glass in a toast. "You silver
 | 飛行／墜落 | 飛行移動、倒地／速度歸零墜落及墜落傷害的必要規則；缺譯 | [飛行](../docs/Browse/movement/fly.md)、[墜落](../docs/Browse/rule/health/falling.md) |
 | 傷害弱點／心靈傷害 | 全傷害弱點 X 與特定類型弱點、心靈類型定義；缺譯 | [弱點](../docs/Browse/rule/damage/damage-weakness.md)、[類型](../docs/Browse/rule/damage/damage-type.md) |
 
-上表各來源連結提供完整原文供定稿；尚無中文候選的項目不冒列為待核准的既定譯文。本批只有上述已核准 4 項寫入 SC，沒有把缺譯改成 APPROVED。
+上表各來源連結提供完整原文供定稿；尚無中文候選的項目不冒列為待核准的既定譯文。上述直接引用缺譯未寫入 Master，也未改為 APPROVED；故事雙寫授權不延伸到其他內容。
 
 ## 共用介面英文
 
