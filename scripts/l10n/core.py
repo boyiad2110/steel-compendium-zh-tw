@@ -225,7 +225,10 @@ class Catalog:
             if rendered is None:
                 hits.append({"record": record_id, "state": "link-adaptation-required"})
                 continue
-            if el.name == "p" and len(rendered.find_all("p", recursive=False)) == 1:
+            # Markdown renders plain text as a paragraph. Headings require inline
+            # children: a nested <p> is relocated by the browser's HTML parser,
+            # leaving an empty heading and an unstyled title outside it.
+            if el.name in {"p", "h1", "h2", "h3", "h4", "h5", "h6"} and len(rendered.find_all("p", recursive=False)) == 1:
                 rendered = rendered.p
             # Numeric/tool readers receive the untouched English source separately.
             el["data-sc-original"] = source

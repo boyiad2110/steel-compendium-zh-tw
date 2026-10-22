@@ -7,3 +7,10 @@
 }
 html[lang="zh-TW"] .md-typeset { line-break: strict; }
 html[lang="zh-TW"] .sc-head__slot { overflow-wrap: anywhere; }
+/* CJK glyphs need a full em of vertical space inside the clipped lead paragraph.
+   Keep the upstream drop cap and its hide setting; adjust approved Chinese prose only. */
+html[lang="zh-TW"]:not([data-no-dropcap]) .sc-trait--lead .sc-trait__body > p[data-sc-l10n]:first-of-type::first-letter {
+  line-height: 1.1;
+  margin-top: 0;
+  padding-top: 0;
+}

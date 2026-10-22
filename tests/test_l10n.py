@@ -160,6 +160,24 @@ class LocalizationTests(unittest.TestCase):
         self.assertEqual(soup.p.em.get_text(), "速選：")
         self.assertTrue(all(x["state"] == "translated" for x in hits))
 
+    def test_segment_headings_remain_headings_after_browser_html_parse(self):
+        cat = Catalog({"records": [
+            row("Purchased Human Traits", "自購人類特性", scope="ancestry:human", id="purchased"),
+            row("Resist the Unnatural", "抵抗異常", scope="ancestry:human", id="resist"),
+        ]})
+        html, _ = cat.translate_html(
+            '<h3 class="sc-trait__title">Purchased Human Traits</h3>'
+            '<div><h3 class="sc-trait__title">Resist the Unnatural</h3><span>1 Point</span></div>',
+            "Browse/ancestry/human.md",
+        )
+        # Reparse the serialized output, as the browser does. Paragraph children
+        # in headings can otherwise make text-only translation assertions pass.
+        parsed = BeautifulSoup(html, "lxml")
+        self.assertEqual([h.get_text() for h in parsed.select("h3.sc-trait__title")],
+                         ["自購人類特性", "抵抗異常"])
+        self.assertFalse(parsed.select("h3 p"))
+        self.assertEqual(parsed.select_one("h3 + span").get_text(), "1 Point")
+
     def test_human_card_flavor_and_scoped_cost_label(self):
         records = [
             row("Giving up is for other people.", "你絕不輕言放棄。", scope="ancestry:human"),
