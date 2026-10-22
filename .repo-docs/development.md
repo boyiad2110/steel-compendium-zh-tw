@@ -72,7 +72,7 @@ $env:SC_SITE_URL = 'https://boyiad2110.github.io/steel-compendium-zh-tw/'
 - 只有 `AGENTS.md`、`CLAUDE.md`、`README.md`、`README.zh-TW.md`、`.impeccable.md`、`.github/pull_request_template.md` 及 `.repo-docs/**/*.md` 可走 `docs`。其他檔案一律 `full`，包含 `docs/**/*.md`、快照、樣式、程式、CI、驗證腳本與依賴設定。
 - API 失敗、差異不完整、讀取期間版本變更、空差異、達到 API 3,000 檔上限或無法確認時，保守走 `full`；分類程式本身執行失敗則 job 失敗，不回報假成功。
 - `docs` 只跑 CI 分類／文件測試與文件檢查，不安裝全站 Python 依賴、不設定 Node、不建置網站。`full` 額外執行既有完整驗證。任一步驟失敗即 `check` 失敗；不是把略過的驗證當作通過。
-- 分類模式與原因寫入 Actions Summary；`ci-reports` artifact 留存分類及文件報告。完整路徑另保留 `localization-reports`。
+- 分類模式與原因寫入 Actions Summary；兩條路徑共用單一 `localization-reports` artifact，留存分類、文件報告及適用的完整驗證結果，避免重複上傳。
 - 同一 PR 有新提交時取消舊版檢查，只跑最新版；手動建置／部署不自動取消前一個執行。PR 與手動執行使用不同 concurrency group。
 - 完整路徑啟用 pip 下載快取，以 `requirements.lock.txt` 雜湊為依據；仍執行安裝，不重用舊建置產物，也不省略測試。
 - 手動執行需提供 `site_url`，無論差異皆走 `full`，`deploy` 預設 `false`。

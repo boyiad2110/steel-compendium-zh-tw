@@ -51,14 +51,9 @@ jobs:
         if: steps.scope.outputs.mode != 'docs'
       - run: python scripts/l10n/verify.py
         if: steps.scope.outputs.mode != 'docs'
-      - name: Upload CI classification and document reports
+      - name: Upload validation reports
         uses: actions/upload-artifact@v4
         if: always()
-        with:
-          name: ci-reports
-          path: reports/ci-*.json
-      - uses: actions/upload-artifact@v4
-        if: always() && steps.scope.outputs.mode != 'docs'
         with:
           name: localization-reports
           path: reports/
