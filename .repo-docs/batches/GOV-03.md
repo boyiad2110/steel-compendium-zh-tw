@@ -8,14 +8,14 @@
 - 不包含：網站程式、譯文、Master、快照、生成文件、CI 程式或新工具變更；不開始 B02、不部署。
 - 依賴：B01 紀錄與 PR #3 的使用者回報、驗收及收尾證據；不載入上游封存。
 - 基準 commit：`8bf48e5486906dc9e2469e1f46819d728c71a031`，已 fetch 確認為最新 `origin/develop`。
-- 工作分支：`codex/gov-03-b01-retrospective`；目標 `develop`；PR URL：待建立。
-- 文件檢閱版本：交付時於 PR 與回覆提供 head SHA，提交後只補紀錄不冒充舊驗收。
+- 工作分支：`codex/gov-03-b01-retrospective`；目標 `develop`；PR URL：[#4](https://github.com/boyiad2110/steel-compendium-zh-tw/pull/4)（Draft）。
+- 文件內容版本：`03019f3b4`；後續提交只補本批 PR 關聯，最新 head 於交付回覆提供。
 
 ## 狀態
 
 | 工程／文件 | 譯文核准 | 人工驗收 | 發布 |
 |---|---|---|---|
-| 完成撰寫，驗證後交付 | 不適用 | 待驗收 | 未部署 |
+| 完成 | 不適用 | 待驗收 | 未部署 |
 
 ## 本地驗收
 
@@ -40,7 +40,7 @@
 
 ## PR 收尾
 
-- PR：待建立；目標 `develop` 的 Draft PR。
+- PR：[#4](https://github.com/boyiad2110/steel-compendium-zh-tw/pull/4)，目標 `develop` 的 Draft PR。
 - 合併狀態：未合併，待使用者明確驗收及最新 CI 通過。
 - 最新檢查、合併 commit 與分支清理結果：待流程執行後留存 PR。
 
