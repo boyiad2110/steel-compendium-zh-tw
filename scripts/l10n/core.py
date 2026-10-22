@@ -152,6 +152,11 @@ class Catalog:
                 continue
             scope = record.get("scope") or record_scope(record)
             source, target = record["source"], record["target"]
+            if record["id"] == "heroes.ancestries.devil.summary":
+                name = next((r for r in data["records"] if r["id"] == "heroes.ancestries.devil.name"
+                             and r.get("status") == "APPROVED" and r.get("sourceHash") == fingerprint(r["source"])), None)
+                if name:
+                    self.segments[normalized("Devil: " + source)].append(("**" + name["target"] + "：** " + target, record["id"], scope))
             # Reviewed B01/B02 introductions only; never enable other batches
             # through typography equivalence.
             if record["id"] in {"heroes.ancestries.human.description.1", "heroes.ancestries.human.description.2",
@@ -405,7 +410,8 @@ class Catalog:
                         and link_path.endswith("/rule/character/characteristic")):
                     translated = ("屬性", record_id, "ancestry:devil")
                 if (record_id.endswith("signature.silver-tongue.effect")
-                        and word == "interpersonal skill group" and link_path.endswith("/skill/interpersonal")):
+                        and word == "interpersonal skill group"
+                        and (link_path.endswith("/skill/interpersonal") or link_path.endswith("/skill/interpersonal/index"))):
                     translated = ("交涉類技能", record_id, "ancestry:devil")
                 if (record_id.endswith("signature.silver-tongue.effect") and word == "tests"
                         and (link_path.endswith("/Read/heroes/tests")

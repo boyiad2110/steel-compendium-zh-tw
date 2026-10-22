@@ -57,9 +57,19 @@ class DevilLocalizationTests(unittest.TestCase):
                     self.assertIn("第 9 章", soup.get_text())
                     self.assertIn("第 11 章", soup.get_text())
                     self.assertIn("第 9 章", self.catalog.translate_markdown(record["source"], uri))
+                template = BeautifulSoup(original, "lxml").select_one("template.sc-src[data-src]")
+                if template and path.name != "devil-traits.md":
+                    exported = self.catalog.translate_markdown(template["data-src"], uri)
+                    self.assertTrue(any("\u4e00" <= char <= "\u9fff" for char in exported), exported)
 
     def test_reading_chapter_relative_reference_is_preserved(self):
         source = (ROOT / "docs/Read/heroes/ancestries.md").read_text(encoding="utf-8")
+        summary = next(p for p in BeautifulSoup(markdown.markdown(source), "lxml").select("p")
+                       if p.get_text().startswith("Devil: Devils originated"))
+        translated_summary, _ = self.catalog.translate_html(str(summary), "Read/heroes/ancestries.md")
+        self.assertIn("魔鬼起源於地獄七城", translated_summary)
+        self.assertIn('data-sc-l10n="heroes.ancestries.devil.summary"', translated_summary)
+        self.assertEqual(BeautifulSoup(translated_summary, "lxml").strong.get_text(), "魔鬼：")
         devil = source.split('\n## Devil {', 1)[1].split('\n## Dragon Knight {', 1)[0]
         translated, hits = self.catalog.translate_html(markdown.markdown(devil), "Read/heroes/ancestries.md")
         soup = BeautifulSoup(translated, "lxml")
