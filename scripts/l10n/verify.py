@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def main():
     steps = [
-        ("python", [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_l10n.py"]),
+        ("python", [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"]),
         ("javascript", ["node", "--test", *[str(p.relative_to(ROOT)) for p in sorted((ROOT / "tests").glob("*.test.js"))]]),
         ("build", [sys.executable, "-m", "mkdocs", "build", "-f", "mkdocs.zh-TW.yml"]),
         ("artifacts", [sys.executable, "scripts/l10n/check_build.py"]),
