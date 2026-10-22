@@ -7,7 +7,7 @@
 - 包含：Agent 規則、文件入口、開發與工作流程、批次範本、PR 範本及本批紀錄。
 - 不包含：網站內容／程式、Master、快照、分支保護、CI 行為、部署與 B01 實作。
 - 基準 commit：`6be639c62`；工作分支：`codex/gov-02-batch-pr-workflow`；目標：`develop`。
-- PR：建立後補上；驗收版本以該 PR 最新提交為準。
+- PR：[GOV-02／#1](https://github.com/boyiad2110/steel-compendium-zh-tw/pull/1)，目前為 Draft；驗收版本以交付時列出的 PR head commit 為準。
 
 ## 狀態
 
@@ -29,7 +29,7 @@
 
 ## 驗證
 
-- 提交前檢查現行文件本地連結、差異空白、僅 Markdown 變更與舊規則殘留，結果於 PR 摘要記錄。
+- 2026-10-22 提交前檢查通過：17 份現行 Markdown、74 個本地連結、差異空白與舊規則殘留；10 個變更檔皆為 Markdown，沒有修改上游封存。
 - 本地程式測試及全站建置未執行：純文件變更；GitHub PR 仍依既有工作流程執行檢查。
 
 ## 使用者驗收與 PR 收尾
