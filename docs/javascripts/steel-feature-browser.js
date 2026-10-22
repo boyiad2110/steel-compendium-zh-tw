@@ -76,7 +76,7 @@
     var eyebrow = esc(it.klass ? it.klass + " " + noun : noun);
     if (it.subclass) eyebrow += " · " + esc(it.subclass);
     var tag = it.tag
-      ? '<div class="sc-prev__tag">' + esc(it.tag) + '</div>'
+      ? '<div class="sc-prev__tag">' + esc(display(it.tag)) + '</div>'
       : '<div class="sc-prev__tag">Level <span class="num">' + esc(it.level) + '</span></div>';
     var marker = "";
     if (it.grants) marker = "Grants " + esc(it.grants);
@@ -91,7 +91,7 @@
         '<div class="sc-prev__titles">' +
           '<div class="sc-prev__eyebrow"><span class="sc-prev__dia"></span>' + eyebrow + '</div>' +
           '<h3 class="sc-prev__name">' + esc(display(it.name)) + '</h3></div>' + tag + '</div>' +
-      (it.flavor ? '<div class="sc-prev__flavor">' + esc(it.flavor) + '</div>' : "") +
+      (it.flavor ? '<div class="sc-prev__flavor">' + esc(display(it.flavor)) + '</div>' : "") +
       foot + '</a>';
   }
 
