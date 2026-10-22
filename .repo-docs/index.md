@@ -1,6 +1,6 @@
 # 中文化專案治理入口
 
-更新日期：2026-10-22。這裡管理 `boyiad2110/steel-compendium-zh-tw`，不是上游 `SteelCompendium/v2` 的工作區。
+更新日期：2026-10-23。這裡管理 `boyiad2110/steel-compendium-zh-tw`，不是上游 `SteelCompendium/v2` 的工作區。
 
 ## 依任務讀取
 
@@ -12,6 +12,7 @@
 | [workflow.md](workflow.md) | 批次、人工驗收、發布授權 | 開始／交付每批、部署 |
 | [development.md](development.md) | 本地命令、驗證、CI 實際行為 | 實作與 QA |
 | [architecture.md](architecture.md) | 技術架構、不可變資料、視覺與互動約束 | 修改程式／樣式 |
+| [b01-retrospective.md](b01-retrospective.md) | B01 得失、改善依據及追蹤 | 開始後續族裔或檢討交付流程 |
 | [batches/README.md](batches/README.md) | 批次清單與紀錄格式 | 追蹤範圍及驗收 |
 | [governance-audit.md](governance-audit.md) | 本次盤點、治理整理與未改事項 | 檢閱本次治理變更 |
 | [upstream/README.md](upstream/README.md) | 上游歷史文件的使用界線 | 必要的技術追查 |
