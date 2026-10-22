@@ -152,6 +152,12 @@ class Catalog:
                 continue
             scope = record.get("scope") or record_scope(record)
             source, target = record["source"], record["target"]
+            if record["id"].startswith("heroes.ancestries.devil.on-devils.paragraph."):
+                # Story sources are captured as rendered text. Literal escaped
+                # cough asterisks must not be parsed as Markdown a second time;
+                # short dialogue is still a whole paragraph, not a global label.
+                self.segments[normalized(source)].append((target, record["id"], scope))
+                continue
             if record["id"] == "heroes.ancestries.devil.summary":
                 name = next((r for r in data["records"] if r["id"] == "heroes.ancestries.devil.name"
                              and r.get("status") == "APPROVED" and r.get("sourceHash") == fingerprint(r["source"])), None)
@@ -272,6 +278,18 @@ class Catalog:
             if rendered is None:
                 hits.append({"record": record_id, "state": "link-adaptation-required"})
                 continue
+            # This approved narrative has dialogue breaks and a scene separator
+            # within individual source paragraphs. Keep valid sibling blocks.
+            if (record_id.startswith("heroes.ancestries.devil.on-devils.paragraph.")
+                    and el.name == "p" and len(list(rendered.children)) > 1):
+                for child in list(rendered.contents):
+                    if getattr(child, "name", None):
+                        child["data-sc-l10n"] = record_id
+                        child["data-sc-original"] = source
+                    el.insert_before(child.extract())
+                el.decompose()
+                hits.append({"record": record_id, "state": "translated"})
+                continue
             # Markdown renders plain text as a paragraph. Headings require inline
             # children: a nested <p> is relocated by the browser's HTML parser,
             # leaving an empty heading and an unstyled title outside it.
@@ -285,6 +303,18 @@ class Catalog:
             for child in list(rendered.contents):
                 el.append(child.extract())
             hits.append({"record": record_id, "state": "translated"})
+        # ETL splits this one sentence in two. Join only when both exact source
+        # records were successfully translated; changed English keeps fallback.
+        left_id = "heroes.ancestries.devil.on-devils.paragraph.44"
+        right_id = "heroes.ancestries.devil.on-devils.paragraph.45"
+        for left in soup.select(f'p[data-sc-l10n="{left_id}"]'):
+            right = left.find_next_sibling()
+            if right and right.name == "p" and right.get("data-sc-l10n") == right_id:
+                left["data-sc-l10n-records"] = left_id + "," + right_id
+                left["data-sc-original"] += " " + right["data-sc-original"]
+                for child in list(right.contents):
+                    left.append(child.extract())
+                right.decompose()
         extra_labels = []
         if uri.startswith("Browse/skill/interpersonal/"):
             extra_labels = soup.select(".sc-card__name")
@@ -417,6 +447,12 @@ class Catalog:
                         and (link_path.endswith("/Read/heroes/tests")
                              or (uri == "Read/heroes/ancestries.md" and link_path == "../tests"))):
                     translated = self.lookup("Test", uri, scc, label=True)
+                if (record_id == "heroes.ancestries.devil.on-devils.paragraph.18"
+                        and word == "distance" and link_path.endswith("/rule/combat/distance")):
+                    translated = ("遠處", record_id, "ancestry:devil")
+                if (record_id == "heroes.ancestries.devil.on-devils.paragraph.40"
+                        and word == "capital" and link_path.endswith("/capital")):
+                    translated = ("元城", record_id, "ancestry:devil")
             if (record_id == "heroes.ancestries.human.trait.cant-take-hold.effect"
                     and text == "distance"
                     and link_path.endswith("/rule/combat/distance")):
@@ -456,7 +492,7 @@ class Catalog:
                     translated = self.lookup(slug, uri, scc, label=True)
             label = translated[0] if translated else text
             identity = (anchor["href"], label)
-            if identity in done:
+            if identity in done and not record_id.startswith("heroes.ancestries.devil.on-devils.paragraph."):
                 continue
             done.add(identity)
             placed = False

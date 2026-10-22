@@ -21,7 +21,7 @@ class DevilLocalizationTests(unittest.TestCase):
             source = source.split("---", 2)[2]
         return markdown.markdown(source, extensions=["attr_list", "md_in_html"])
 
-    def test_main_introduction_traits_links_and_unapproved_story(self):
+    def test_main_introduction_traits_links_and_approved_story(self):
         source = self.render("Browse/ancestry/devil.md")
         translated, hits = self.catalog.translate_html(source, "Browse/ancestry/devil.md")
         soup = BeautifulSoup(translated, "lxml")
@@ -33,8 +33,12 @@ class DevilLocalizationTests(unittest.TestCase):
         # De-duplication of identical repeated links is intentional; no destination lost.
         self.assertEqual({a["href"] for a in soup.select("a[href]")},
                          {a["href"] for a in BeautifulSoup(source, "lxml").select("a[href]")})
-        self.assertIn("Adelard scuttled across the floor", soup.get_text())
-        self.assertIn("On Devils", soup.get_text())
+        self.assertNotIn("Adelard scuttled across the floor", soup.get_text())
+        self.assertIn("談魔鬼", soup.get_text())
+        without_story = Catalog({"records": [r for r in self.catalog.data["records"]
+                                             if ".devil.on-devils." not in r["id"]]})
+        fallback, _ = without_story.translate_html(source, "Browse/ancestry/devil.md")
+        self.assertIn("Adelard scuttled across the floor", fallback)
         self.assertFalse(soup.select("h3 > p"))
         self.assertIn("速選：獸腿、威嚴犄角。", soup.get_text())
         # Actual MkDocs output rewrites self-links to ./, unlike raw Markdown.
