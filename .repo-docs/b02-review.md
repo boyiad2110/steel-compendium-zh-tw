@@ -231,3 +231,7 @@ She blushed in spite of herself and raised her own glass in a toast. "You silver
 | 傷害弱點／心靈傷害 | 全傷害弱點 X 與特定類型弱點、心靈類型定義；缺譯 | [弱點](../docs/Browse/rule/damage/damage-weakness.md)、[類型](../docs/Browse/rule/damage/damage-type.md) |
 
 上表各來源連結提供完整原文供定稿；尚無中文候選的項目不冒列為待核准的既定譯文。本批只有上述已核准 4 項寫入 SC，沒有把缺譯改成 APPROVED。
+
+## 共用介面英文
+
+本輪畫面仍可見 Browse／Books／Features 導覽、Trait／Skill 分類、Source／printing 來源標記、設定文字及匯出按鈕。這些不代表規則效果缺譯；部分是共用介面尚未核准，部分是現有術語尚未覆蓋該 UI 顯示接點。B02 只核准前述 3 個新增 UI，沒有以此延伸為全站 UI 核准；維持英文並於整批完成前追蹤必要項目。MD／PNG 與英文識別碼保留其工具格式。
