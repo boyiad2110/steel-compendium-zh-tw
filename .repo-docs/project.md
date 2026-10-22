@@ -1,39 +1,36 @@
----
-repo: v2
-doc: project
-updated: 2026-05-23
----
+# 專案目標與範圍
 
-# Project
+## 目標
 
-## Vision
+以獨立中文站提供 Draw Steel 資料。保留原站功能、視覺及版面結構，只將核准的英文顯示文字換成繁體中文，採用台灣用語。
 
-Provide the most usable, searchable, and linkable online reference for the Draw Steel TTRPG rules. Every piece of content has a permanent SCC-based URL that survives site reorganization.
+首個內容里程碑：玩家能查閱足夠的中文資料，完成 **Heroes 所有職業的 1 級角色建立**。本站是規則參考站，這個目標不包含另做角色建立器或改動遊戲規則。
 
-## Audiences
+## 優先順序
 
-- **Players**: browsing classes, abilities, ancestries, kits, and other character options
-- **Directors**: referencing rules chapters, conditions, complications
-- **Content creators**: linking to specific rules with stable permalinks
+| 階段 | 範圍與完成目標 |
+|---|---|
+| P0 | 翻譯 Master、核准快照、顯示接點、必要導覽與中英文搜尋，能穩定建置和驗證 |
+| P1 | 創角流程、族裔、文化、生涯、語言、技能、九職業初始特性與招式、適用套裝、專長、Complications、起始裝備與必要選擇 |
+| P2 | Heroes 2–10 級成長、其餘招式與特性、完整檢定及戰鬥規則、協商、休整活動、獎勵與寶物 |
+| P3 | Heroes 主持人章節，以及前階段尚未涵蓋的背景與說明 |
+| P4 | Monsters、Beastheart、Summoner 與相關工具文字 |
 
-## Glossary
+P1 包含理解選項所需的屬性、體力、恢復、資源、招式欄位及關鍵狀態；職業明確引用的神祇、夥伴或特殊選項隨該職業處理，不因分類不同而延後。敘事背景可另批處理，但不可排除會影響創角決策的規則。
 
-| Term | Meaning |
-|------|---------|
-| SCC | Steel Compendium Classification -- hierarchical code identifying every piece of content (e.g., `mcdm.heroes.v1/class/fury`) |
-| Browse | Tab section with modular rules pages organized by content type |
-| Bestiary | Tab section with modular Monsters-book pages (monster groups, statblocks, malice, terrain, retainers); monster group pages are lore-only |
-| Read | Tab section with full rulebook chapters in book order, grouped per book (book-faithful, everything inline) |
-| Composite | A generated page that aggregates traits and abilities into a parent page (e.g., all fury abilities merged into the fury class page) |
-| Group | A remapping that nests related content under a parent directory (e.g., kit signature abilities under `Kits/`) |
-| Static content | Hand-authored files in `static_content/docs/` that override generated content |
-| steel-etl | The Go CLI tool that parses annotated markdown and generates all output formats |
+## 完成定義
 
-## Related Repos
+- **工程接線完成**：適用的閱讀頁、瀏覽頁、卡片、搜尋及匯出都支援同一核准對應與英文回退，且原本互動及數值結果不變。
+- **譯文核准完成**：該批範圍的必要文字全部有可追溯、符合原文／語境／版本的核准譯文。
+- **人工驗收通過**：使用者檢查指定本地版本與驗收清單後，明確表示通過，並記錄版本、日期與結果。
+- **該範圍中文化完成**：以上三項皆完成，必要文字沒有缺譯；若本批只處理某個子範圍，不能宣稱整頁、整族裔或整職業完成。
 
-| Repo | Relationship |
-|------|-------------|
-| `steel-etl/` | Generates all content; the `site` command builds this repo's `docs/` directory |
-| `data/data-rules/` | Source markdown that steel-etl reads |
-| `draw-steel-elements/` | Obsidian plugin -- consumes the same ETL output in a different directory structure |
-| `steelCompendium.github.io/` | GitHub Pages deployment target |
+九個職業須各自查到完整 1 級選項、條件與正確引用，才算 P1 完成。缺譯可分批發布，但不能列為該內容中文化完成。
+
+## 不變條件
+
+保留所有頁面與既有功能；未中文化內容維持英文。保留識別碼、網址、錨點、數值和分享格式，允許中文造成合理換行與高度變化。手機／桌面、明亮／深色模式不得有文字截斷、重疊或操作障礙。
+
+`l10n/p1-manifest.json` 和建置報告是範圍盤點工具；候選頁可能包含高等級或重複內嵌內容，不能以頁數、名稱翻譯率或區塊比例判定 1 級創角完成。
+
+批次和完成紀錄依 [workflow.md](workflow.md) 與 [批次清單](batches/README.md) 管理。

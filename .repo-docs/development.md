@@ -1,149 +1,68 @@
----
-repo: v2
-doc: development
-updated: 2026-07-02
----
+# 本地開發與驗證
 
-# Development
+以下命令從 repo 根目錄執行，使用 PowerShell。Python 3.13、Node.js 22 以上；現有 CI 使用 Python 3.13、Node.js 24。
 
-## Prerequisites
+## 安裝與預覽
 
-- Python 3.x with pip
-- Go toolchain (via devbox -- see workspace CLAUDE.md)
-- `just` command runner (via devbox)
-
-## Setup
-
-```bash
-# From workspace root, activate devbox
-devbox run --
-
-# Install Python dependencies
-pip install mkdocs-material mkdocs-roamlinks-plugin mkdocs-awesome-nav-plugin
-
-# Generate content and build docs/
-cd v2
-just update push=false
-
-# Preview locally (runs `just fonts` first)
-just serve
+```powershell
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.lock.txt
+.venv\Scripts\python.exe -m mkdocs serve -f mkdocs.zh-TW.yml
 ```
 
-**Licensed fonts.** The deployed site loads Berlingske Slab from the root site's
-`/fonts/licensed/`, which `mkdocs serve` can't reach. So for local preview, `just fonts`
-clones the private `SteelCompendium/licensed-fonts` repo into `.licensed-fonts/` and
-installs a copy into `docs/stylesheets/licensed-fonts/`. Each `@font-face` falls back to
-that copy. Both paths are gitignored — **never commit the font files**; the repo is
-public and the Playtype license forbids it. Without access to that repo, body text
-renders in Zilla Slab. Rules: workspace `ARCHITECTURE.md` → "Licensed fonts".
+已存在 `.venv` 時直接使用。預覽在 <http://127.0.0.1:8000/>，先等首次建置完成；全站建置可能需要數分鐘。交付時保持預覽可用，若已停止則提供重新啟動方式。
 
-## Development Workflow
+中文建置的 `SC_SITE_URL` 預設是本地網址。如 shell 留有正式網址，先設回本地，避免驗收時分享與 canonical 指向正式站：
 
-### Editing presentation (CSS, JS, templates)
-
-1. Run `just serve` for live preview
-2. Edit files in `docs/javascripts/`, `docs/stylesheets/`, or `overrides/`
-3. MkDocs auto-reloads on save
-
-### Overriding generated content
-
-1. Find the generated file under `docs/` (e.g., `docs/Browse/index.md`)
-2. Copy it to the same path under `static_content/docs/`
-3. Edit the copy -- `steel-etl site` copies `static_content/` last, so your version wins
-4. Run `just update push=false` to verify
-
-### Modifying site structure
-
-Site structure is controlled by `site.yaml`, not by moving files. To change which content appears in which section, edit `site.yaml` and re-run `just update push=false`.
-
-### Modifying the content pipeline
-
-Content generation is handled by `steel-etl`. See `steel-etl/CLAUDE.md` for that workflow.
-
-## Build Process
-
-`just update` runs these steps:
-
-1. `steel-etl gen` -- full ETL pipeline (parse, classify, output)
-2. Embed steel-etl version into `mkdocs.yml` copyright
-3. `steel-etl site` -- map output into MkDocs structure, generate SCC stubs
-4. `transform_indexes.py` -- convert Browse index pages to grid card layouts
-5. (Optional) commit and push
-
-## Testing
-
-Three layers:
-
-**Unit (node:test).** Every interactive feature splits pure logic into a
-`docs/javascripts/<name>-core.js` UMD module with a matching `tests/<name>-core.test.js`.
-Run with an explicit glob — this Node version rejects a bare directory argument:
-
-```bash
-node --test tests/*.test.js
+```powershell
+$env:SC_SITE_URL = 'http://127.0.0.1:8000/'
+.venv\Scripts\python.exe -m mkdocs serve -f mkdocs.zh-TW.yml
 ```
 
-**e2e (`tests/e2e/*.e2e.cjs`).** Real-browser checks driving the locally installed
-Brave via playwright-core + `executablePath` (the Playwright MCP / chrome channel is
-broken in this environment). Each file documents its own run recipe; the shape is:
+原站 `justfile` 依賴上游多 repo 工作區；其中的 `serve`／`build` 使用英文設定並嘗試取得私有字型，`update` 預設還會 commit／push。本站中文化日常工作不用這些命令，也不用 `just clean_docs` 或 `just deploy-v2`。
 
-```bash
-mkdocs build
-python3 -m http.server 8124 --directory site &
-node tests/e2e/page-titles.e2e.cjs        # H1 visible on containers, hidden on card leaves
-node tests/e2e/cardhead-mobile.e2e.cjs    # statblock name doesn't letter-wrap at 390px
+## 驗證層級
+
+### 翻譯接線、程式、樣式或快照變更
+
+```powershell
+.venv\Scripts\python.exe scripts/l10n/verify.py
 ```
 
-Both also accept `E2E_BASE=https://steelcompendium.io/v2/` to run against production.
+此入口依序執行 Python 翻譯測試、上游與本站 JavaScript 單元測試、中文完整建置、建置產物檢查，將各步驟結果寫入 `reports/verification.json`。讀取實際結果；不能以開始執行或舊報告當作通過。
 
-**Manual smoke** after a build:
+依本批變更執行 [人工驗收清單](workflow.md)，並在真實瀏覽器測試受影響功能。即時導覽問題也能在本地重現：由站內連結跳頁測試，不能只重新整理或逐頁直接開啟。現有 `tests/e2e/` 可作回歸參考，執行前確認其瀏覽器與本地 URL 設定。
 
-- `mkdocs build` exits 0 with no new warnings
-- Redirect stubs work (visit `/v2/scc/{any-code}/` directly)
-- Heading ¶ anchors copy `/scc/…` on coded headings (see troubleshooting.md)
-- `navigation.instant` behaviors (mini-TOC, tray, pins mount exactly once per swap)
-  reproduce **only on the deployed site** — recheck after deploy, not just locally
+### 純治理／說明文件變更
 
-The steel-etl side has Go tests for all site-builder transforms (`internal/site/*_test.go`).
+執行 `git diff --check`，確認新治理文件的本地連結與命令路徑存在、沒有現行互斥規則，且差異沒有混入生成內容、翻譯快照或程式變動。歷史文件外部工作區連結可保持原狀，但必須標示為上游參考。純文件修改不需重跑全站建置，不能因此宣稱程式測試已通過。
 
-## Troubleshooting
+### 發布驗證
 
-See [troubleshooting.md](troubleshooting.md).
+取得發布授權並選定已驗收 commit 後，用實際網址：
 
-## My Table custom links
+```powershell
+$env:SC_SITE_URL = 'https://boyiad2110.github.io/steel-compendium-zh-tw/'
+.venv\Scripts\python.exe scripts/l10n/verify.py
+```
 
-`sc-pins-core.js` owns validation and insertion; `sc-pins.js` mounts the form
-next to `.sc-pins-mount` on each Material navigation. Existing version-1 saved pins
-remain compatible. Custom links use the same `{path,title,kind,ts}` records with
-`kind: "Custom links"`. Same-origin URLs become root-relative paths, preserving
-queries and anchors. Re-adding a path updates its display name and group. New custom
-links at the 200-item limit are rejected without evicting a saved pin.
+完成後回到本地工作時將環境變數設回本地網址。發布的人工閘門見 [workflow.md](workflow.md)。
 
-Only HTTP(S) URLs and root-relative paths are accepted, including when reading
-storage. Labels render as escaped text. User-defined categories are tracked in SC-178.
-Browser coverage: `tests/e2e/pins-custom-links.e2e.cjs` (set `E2E_BASE` and optionally
-`PLAYWRIGHT_PATH` to your installed playwright-core module).
+## 分支與整合
 
-### Saved heading excerpts
+`develop` 是 GitHub 預設分支，也是本站中文化工作的整合目標。使用者已指定後續中文化變更推送或合併到此分支，不預設推送到 `main`。
 
-`sc-pins-sections.js` loads same-site heading fragments and SCC permalinks on demand.
-SCC HTML stubs resolve through their canonical target (bounded to the same site root,
-without executing scripts). DOM ranges include everything after the selected heading
-through, but excluding, the next equal-or-higher heading; this works across nested
-wrappers and includes subordinate headings and tables. Missing headings fail explicitly.
+一般批次可在 `develop` 工作；需要隔離變更時，從 `develop` 建立 `codex/` 分支，完成後合併回 `develop`。上游同步 PR 也以 `develop` 為目標。推送／合併與本地人工驗收、網站部署是不同動作，仍遵守 [工作流程](workflow.md)。
 
-The board presents native collapsible sections, preserving open states during mutations
-and aborting old requests on rerender/navigation. Excerpts preserve book markup but strip
-scripts and page controls, resolve relative resource/link URLs against the source, namespace
-IDs, and wrap wide tables for horizontal scrolling. They are read-only excerpts; live
-page tools remain on the original page. External links are never fetched. No HTML is
-stored in localStorage. `tests/e2e/pins-sections.e2e.cjs` covers the Monsters examples,
-SCC resolution, missing anchors, section boundaries and reload behavior.
+## CI 的實際行為
 
-### My Table layout
+- [zh-tw.yml](../.github/workflows/zh-tw.yml)：PR 執行驗證；手動執行需提供 `site_url`，`deploy` 預設 `false`。
+- 只有手動指定 `deploy: true` 才進行中文 Pages 部署，且要先通過 check 工作；操作者必須先有使用者的發布授權。
+- [ci.yml](../.github/workflows/ci.yml)：保留上游流程，部署 job 限定 `SteelCompendium/v2`，不是本站發布入口。
+- 現在沒有每次 push 就部署的設定，也沒有 CI 自動確認人工驗收的機制。
 
-The add-section form is collapsed behind a button with `aria-expanded` and
-`aria-controls`. Opening focuses the name field; Cancel, Escape, and successful save
-close the form and restore focus to the trigger. Validation errors keep it open.
-Save confirmation lives in the visible toolbar's live region. The title and category
-headings use compact, board-scoped styles. Custom categories remain SC-178.
-`tests/e2e/pins-layout.e2e.cjs` covers the disclosure, focus, save/cancel and mobile layout.
+## 報告與追蹤
+
+`site/`、`.work/`、`reports/`、`outputs/`、`.venv/` 及 `node_modules/` 為本地／生成資料。`reports/` 不納入 Git；需要長期保留的 QA 結論、限制、驗收證據及版本寫入 [批次紀錄](batches/README.md)。不要遞迴掃描或修改工具安裝目錄、依賴 junction 或其他專案。
+
+上游版本更新先核對 [upstream.json](../l10n/upstream.json)，在 `codex/` 分支整理同步 PR、文字差異、過期譯文及失效對應，再驗證受影響內容。一般本地預覽不需要取得 `steel-etl` 或重新生成上游規則。
