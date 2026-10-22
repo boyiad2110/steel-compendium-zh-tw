@@ -8,7 +8,7 @@
 2. 開始一批實作前，讀 [.repo-docs/workflow.md](.repo-docs/workflow.md) 及該批紀錄。
 3. 翻譯相關讀 [translation.md](.repo-docs/translation.md)；程式相關讀 [architecture.md](.repo-docs/architecture.md) 與 [development.md](.repo-docs/development.md)。
 
-不要一次載入全部上游歷史文件。`CLAUDE.md` 只引用本檔，兩種 Agent 使用相同規則。
+已讀且未變的文件沿用，不逐輪重讀；只在任務或來源變動時補讀相關段落。大型資料由程式比對，模型預設只讀摘要、差異與異常，語意判讀或排錯才展開全文；完整輸出留在本地報告。不要一次載入上游歷史。`CLAUDE.md` 只引用本檔。
 
 ## 專案界線
 
@@ -39,7 +39,7 @@
 
 ## 工程與驗證
 
-- 完整程式驗證入口：`.venv\Scripts\python.exe scripts/l10n/verify.py`。依變更補足實際瀏覽器驗證；純治理文件使用 `scripts/ci/check.py docs` 及 CI 測試，不需全站建置。CI 依整個 PR 差異分類，未知、網站內容、CI 本身或手動執行仍做完整驗證；詳見 development。
+- 開發先跑局部測試，穩定交付再用 `.venv\Scripts\python.exe scripts/l10n/verify.py`；純文件只做文件檢查與 CI 測試。每次操作須有新目的或證據需求，仍有效的結果直接沿用；本地證據失效條件與整個 PR 的 CI 要求分開判斷，詳見 development。
 - 客戶端掛載使用 Material `document$`，保持冪等並清理監聽器；不能只依賴 `DOMContentLoaded`。本地預覽也要實測站內即時導覽。
 - 不讓翻譯後文字進入原本的解析或數值計算；保留原值。共用翻譯對應必須涵蓋閱讀頁、瀏覽頁、卡片、搜尋及適用匯出。
 - 只報告實際執行的驗證與限制。不得將自動報告的候選頁數或中文區塊比例當作 1 級創角完成率。
