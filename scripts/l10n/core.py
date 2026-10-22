@@ -107,7 +107,8 @@ def scope_matches(scope: str, uri: str, scc: str = "") -> bool:
         return scope == "heroes" and uri in {"index.md", "table-reference.md"}
     if scope.startswith("ancestry:"):
         slug = scope.split(":", 1)[1]
-        return uri == f"Browse/ancestry/{slug}.md" or f"/{slug}/" in uri
+        return (uri == f"Browse/ancestry/{slug}.md" or f"/{slug}/" in uri
+                or (slug == "devil" and uri == "Browse/ancestry/index.md"))
     if scope.startswith("kit:"):
         slug = scope.split(":", 1)[1]
         return uri == f"Browse/kit/{slug}.md" or f"/{slug}/" in uri or f"/Kits/{slug}-" in uri
@@ -151,10 +152,33 @@ class Catalog:
                 continue
             scope = record.get("scope") or record_scope(record)
             source, target = record["source"], record["target"]
-            # These Book introductions were explicitly approved for B01 by the
-            # user. Do not silently activate unrelated content in other batches.
-            if record["id"] in {"heroes.ancestries.human.description.1", "heroes.ancestries.human.description.2"}:
+            # Reviewed B01/B02 introductions only; never enable other batches
+            # through typography equivalence.
+            if record["id"] in {"heroes.ancestries.human.description.1", "heroes.ancestries.human.description.2",
+                                "heroes.ancestries.devil.description.1", "heroes.ancestries.devil.description.3",
+                                "heroes.ancestries.devil.description.4"}:
                 self.typographic_segments[typography_key(plain(source))].append((target, record["id"], scope))
+                if record["id"] == "heroes.ancestries.devil.description.1":
+                    # ETL prints this single Book em dash as a hyphen. No words differ.
+                    for separator in ("-", " -"):
+                        key = typography_key(plain(source.replace("hellmark—horns", "hellmark" + separator + "horns")))
+                        self.typographic_segments[key].append((target, record["id"], scope))
+            if record["id"] == "heroes.ancestries.devil.signature.silver-tongue.effect":
+                # get_text inserts spaces at the exact authored link boundaries.
+                rendered_source = source.replace("NPC’s", "NPC 's").replace("Tests)", "Tests )").replace("Negotiation)", "Negotiation )")
+                self.typographic_segments[typography_key(plain(rendered_source))].append((target, record["id"], scope))
+            if record["id"] == "heroes.skills.interpersonal.rules":
+                # B02's direct skill dependency: exact parallel rows in the approved
+                # Book table, rendered upstream as separate skill cards/pages.
+                src_rows = source.split("Skill | Use\n", 1)[-1].splitlines()
+                dst_rows = target.split("技能｜用途\n", 1)[-1].splitlines()
+                if len(src_rows) == len(dst_rows) == 13:
+                    for src_row, dst_row in zip(src_rows, dst_rows):
+                        src_cells, dst_cells = src_row.split(" | "), dst_row.split("｜")
+                        if len(src_cells) == len(dst_cells) == 2:
+                            self.segments[normalized(src_cells[1] + ".")].append((dst_cells[1], record["id"], scope))
+                first = source.split("\n\n")[1].replace("Negotiation)", "Negotiation )")
+                self.typographic_segments[typography_key(plain(first))].append((target.split("\n\n")[1], record["id"], scope))
             if record["kind"] in {"glossary", "names", "ui"}:
                 self.labels[normalized(plain(source)).casefold()].append((target, record["id"], scope))
                 continue
@@ -209,7 +233,12 @@ class Catalog:
         soup = BeautifulSoup(content, "lxml")
         hits = []
         # Containers first; descendants are not independently replaced afterwards.
-        for el in list(soup.select(BLOCKS)):
+        blocks = list(soup.select(BLOCKS))
+        if uri == "Browse/ancestry/index.md":
+            blocks += soup.select(".sc-card__flavor")
+        elif uri.startswith("Browse/skill/interpersonal/"):
+            blocks += soup.select(".sc-card__blurb")
+        for el in blocks:
             if el.parent is None or el.find_parent(["script", "template", "style", "code", "pre"]):
                 continue
             if el.get("data-sc-l10n") or el.find_parent(attrs={"data-sc-l10n": True}):
@@ -219,7 +248,7 @@ class Catalog:
             if el.get("class") and "chars" in el["class"]:
                 continue
             source = normalized(el.get_text(" ", strip=True))
-            composed = self._human_quick_build(el, source, uri, scc)
+            composed = self._ancestry_quick_build(el, source, uri, scc)
             if composed:
                 target, record_ids, rendered = composed
                 el["data-sc-original"] = source
@@ -241,7 +270,8 @@ class Catalog:
             # Markdown renders plain text as a paragraph. Headings require inline
             # children: a nested <p> is relocated by the browser's HTML parser,
             # leaving an empty heading and an unstyled title outside it.
-            if el.name in {"p", "h1", "h2", "h3", "h4", "h5", "h6"} and len(rendered.find_all("p", recursive=False)) == 1:
+            if (el.name in {"p", "h1", "h2", "h3", "h4", "h5", "h6"}
+                    or set(el.get("class", [])) & {"sc-card__flavor", "sc-card__blurb"}) and len(rendered.find_all("p", recursive=False)) == 1:
                 rendered = rendered.p
             # Numeric/tool readers receive the untouched English source separately.
             el["data-sc-original"] = source
@@ -250,7 +280,12 @@ class Catalog:
             for child in list(rendered.contents):
                 el.append(child.extract())
             hits.append({"record": record_id, "state": "translated"})
-        for el in list(soup.select(LABELS)):
+        extra_labels = []
+        if uri.startswith("Browse/skill/interpersonal/"):
+            extra_labels = soup.select(".sc-card__name")
+        elif uri == "Browse/ancestry/index.md":
+            extra_labels = [el for el in soup.select(".sc-card__name") if el.get_text(strip=True) == "Devil"]
+        for el in list(soup.select(LABELS)) + extra_labels:
             if el.parent is None or el.find_parent(["script", "template", "style", "code", "pre"]):
                 continue
             if el.get("data-sc-l10n") or el.find_parent(attrs={"data-sc-l10n": True}):
@@ -322,10 +357,12 @@ class Catalog:
                 output.append(part)
         return "".join(output)
 
-    def _human_quick_build(self, element, source: str, uri: str, scc: str):
-        """Compose the approved human point summary and quick-build records safely."""
+    def _ancestry_quick_build(self, element, source: str, uri: str, scc: str):
+        """Compose only the reviewed human/devil summaries from approved parts."""
         intro_source = "You have 3 ancestry points to spend on the following traits."
-        quick_source = "Quick Build: Perseverance, Staying Power."
+        quick_source = ("Quick Build: Beast Legs, Impressive Horns."
+                        if "Beast Legs, Impressive Horns." in source
+                        else "Quick Build: Perseverance, Staying Power.")
         intro = self.lookup(intro_source, uri, scc)
         quick = self.lookup(quick_source, uri, scc)
         compact = lambda value: re.sub(r"\(\s+", "(", re.sub(r"\s+\)", ")", normalized(value)))
@@ -357,6 +394,23 @@ class Catalog:
             link_path = urlsplit(anchor["href"]).path.rstrip("/")
             if link_path.lower().endswith(".md"):
                 link_path = link_path[:-3].rstrip("/")
+            # Reviewed Devil records: preserve the approved prose's inflections
+            # and full linked phrase, without changing glossary text elsewhere.
+            if record_id.startswith("heroes.ancestries.devil."):
+                word = text.casefold()
+                if word in {"devil", "devils", "devil's"} and (
+                        anchor["href"] in {".", "./"} or link_path.endswith("/devil") or link_path == "devil"):
+                    translated = self.lookup("Devil", uri, scc, label=True)
+                if (record_id.endswith("trait.barbed-tail.effect") and word == "characteristic"
+                        and link_path.endswith("/rule/character/characteristic")):
+                    translated = ("屬性", record_id, "ancestry:devil")
+                if (record_id.endswith("signature.silver-tongue.effect")
+                        and word == "interpersonal skill group" and link_path.endswith("/skill/interpersonal")):
+                    translated = ("交涉類技能", record_id, "ancestry:devil")
+                if (record_id.endswith("signature.silver-tongue.effect") and word == "tests"
+                        and (link_path.endswith("/Read/heroes/tests")
+                             or (uri == "Read/heroes/ancestries.md" and link_path == "../tests"))):
+                    translated = self.lookup("Test", uri, scc, label=True)
             if (record_id == "heroes.ancestries.human.trait.cant-take-hold.effect"
                     and text == "distance"
                     and link_path.endswith("/rule/combat/distance")):
