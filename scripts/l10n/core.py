@@ -20,7 +20,7 @@ from bs4 import BeautifulSoup, Comment, NavigableString
 
 ROOT = Path(__file__).resolve().parents[2]
 BLOCKS = "p,li,td,th,h1,h2,h3,h4,h5,h6,.sc-ability__section-body,.sc-ability__tier .res,.sb__feat-body,.sc-prev__flavor"
-LABELS = "a,h1,h2,h3,h4,h5,h6,.tag,.pre,.l,.sc-head__slot,.sc-prev__tag,.sc-ability__chip,.sc-ability__cell .v,dt,th"
+LABELS = "a,h1,h2,h3,h4,h5,h6,.tag,.pre,.l,.sc-head__slot,.sc-prev__tag,.sc-ability__chip,.sc-prev__chip,.sc-ability__cell .v,dt,th"
 
 
 def is_dragon_knight_ability_context(uri: str) -> bool:
@@ -361,15 +361,25 @@ class Catalog:
                         node.replace_with(NavigableString(" / "))
                 if chars.find(True) and chars.contents and getattr(chars.contents[0], "name", None) == "a":
                     chars.insert(0, NavigableString(" "))
-            for value in soup.select(".sc-ability__cell .v"):
+            for value in soup.select(".sc-ability__cell .v, .sc-prev--ability .sc-prev__meta .v"):
                 source = normalized(value.get_text(" ", strip=True))
                 found = self.lookup(source, uri, scc)
                 if not found:
                     continue
                 target, record_id, _ = found
+                # Index previews emphasize numeric ranges with <b>; preserve
+                # that authored emphasis when the approved formula reorders it.
+                bold_numbers = {b.get_text(strip=True) for b in value.select("b")
+                                if b.get_text(strip=True).isdigit()}
+                if bold_numbers:
+                    target = re.sub(r"\b\d+\b", lambda m: f"**{m[0]}**" if m[0] in bold_numbers else m[0], target)
                 rendered = self._linked_target(target, value, uri, scc, record_id)
                 if rendered is None:
                     continue
+                if bold_numbers:
+                    for emphasis in rendered.select("strong"):
+                        if emphasis.get_text() in bold_numbers:
+                            emphasis.name = "b"
                 if len(rendered.find_all("p", recursive=False)) == 1:
                     rendered = rendered.p
                 value["data-sc-original"] = source

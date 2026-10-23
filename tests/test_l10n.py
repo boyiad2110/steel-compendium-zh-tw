@@ -17,6 +17,25 @@ def row(source, target, kind="strings", scope="heroes", status="APPROVED", id="t
 
 
 class LocalizationTests(unittest.TestCase):
+    def test_dragon_knight_static_ability_index_uses_approved_card_fields(self):
+        import markdown
+        root = Path(__file__).resolve().parents[1]
+        uri = "Browse/feature/ability/dragon-knight/index.md"
+        source = (root / "docs" / uri).read_text(encoding="utf-8")
+        cat = Catalog(load_catalog())
+        translated, _ = cat.translate_html(markdown.markdown(source), uri)
+        cards = BeautifulSoup(translated, "html.parser").select(".sc-prev--ability")
+        self.assertEqual(len(cards), 2)
+        self.assertEqual([a['href'] for a in cards], ['draconian-pride/', 'dragon-breath/'])
+        for card in cards:
+            self.assertEqual([c.get_text() for c in card.select('.sc-prev__chip')], ['區域', '魔法'])
+            values = card.select('.sc-prev__meta .v')
+            self.assertEqual(values[1].get_text(), '區域內每個敵人')
+            self.assertFalse(card.select('.sc-prev__meta .v p'))
+        self.assertEqual(cards[0].select_one('.v').get_text(), '1 爆發')
+        self.assertEqual(cards[1].select_one('.v').get_text(), '1 格內 3 立方')
+        self.assertEqual([b.get_text() for b in cards[1].select('.v b')], ['1', '3'])
+
     def test_dragon_knight_real_browse_and_read_prose_stays_in_sync(self):
         import markdown
         cat = Catalog(load_catalog())
