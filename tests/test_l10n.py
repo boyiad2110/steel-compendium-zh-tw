@@ -17,6 +17,224 @@ def row(source, target, kind="strings", scope="heroes", status="APPROVED", id="t
 
 
 class LocalizationTests(unittest.TestCase):
+    def test_approved_dragon_knight_text_reaches_ancestry_and_feature_indexes(self):
+        from types import SimpleNamespace
+        from core import normalized, scope_matches
+        import hooks
+
+        cat = Catalog(load_catalog())
+        summary = "Dragon knights are muscled draconic humanoids who stand between 6 and 7 feet tall. The scales covering their reptilian heads, bodies, and tails can be almost any color. All dragon knights have wings, but on only a few are those wings big enough to let them fly."
+        self.assertTrue(scope_matches("ancestry:dragon-knight", "Browse/ancestry/index.md"))
+        summary_record = next(r for r in cat.data["records"]
+                              if r["id"] == "heroes.ancestries.dragon-knight.summary")
+        self.assertEqual(cat.lookup(summary, "Browse/ancestry/index.md"),
+                         (summary_record["target"], summary_record["id"], summary_record["scope"]))
+
+        item = {"href": "trait/dragon-knight/draconian-pride/", "name": "Draconian Pride",
+                "klass": "Dragon Knight", "level": 0,
+                "flavor": "You let loose a mighty roar to shake your foes’ spirits.",
+                "grants": "the Draconian Pride main action"}
+        choice = {"href": "trait/dragon-knight/dragon-knight-traits/", "name": "Dragon Knight Traits",
+                  "klass": "Dragon Knight", "level": 0, "options": 2,
+                  "flavor": "Even should the sun stop in the sky."}
+        ability = {"kind": "ability", "href": "ability/dragon-knight/dragon-breath/",
+                   "name": "Dragon Breath", "klass": "Dragon Knight", "level": 0,
+                   "cost": "Signature", "keywords": ["Area", "Magic"],
+                   "distance": "**3** cube within **1**", "targets": "Each enemy in the area",
+                   "flavor": "A furious exhalation of energy washes over your foes."}
+        html = '<script class="sc-browse-data">' + json.dumps([item, choice, ability]) + '</script>'
+        page = SimpleNamespace(file=SimpleNamespace(src_uri="Browse/feature/index.md"), meta={}, title="",
+                               toc=SimpleNamespace(items=[]), url="Browse/feature/")
+        with patch.object(hooks, "catalog", cat), patch.object(hooks, "pages", []):
+            translated = hooks.on_page_content(html, page, None, None)
+        result = BeautifulSoup(translated, "html.parser")
+        data = json.loads(result.select_one("script.sc-browse-data").string)
+        labels = json.loads(result.select_one("template#sc-l10n-labels")["data-labels"])
+        self.assertEqual(data[0]["tag"], "2 Points")
+        self.assertEqual(labels["draconian pride"], "龍人霸氣")
+        self.assertEqual(labels["dragon knight trait"], "龍騎士特性")
+        self.assertEqual(labels["2 options"], "2 個選項")
+        self.assertEqual(labels["grants the draconian pride main action"], "獲得招式：龍人霸氣")
+        self.assertEqual(data[2]["distance"], "**3** cube within **1**")
+        self.assertEqual(labels["dragon breath"], "龍息")
+        self.assertEqual(labels["signature"], "招牌")
+        self.assertEqual(labels["area"], "區域")
+        self.assertEqual(labels["from"], "來源")
+        self.assertEqual(labels["lv"], "等級")
+        self.assertEqual(labels["distance"], "射程")
+        self.assertEqual(labels["targets"], "目標")
+        self.assertEqual(labels["**3** cube within **1**"], "**1** 格內 **3** 立方")
+        self.assertEqual(labels["each enemy in the area"], "區域內每個敵人")
+        self.assertEqual(labels["level"], "等級")
+        self.assertIn("狂怒", labels[normalized(ability["flavor"]).casefold()])
+        flavor_key = normalized(item["flavor"]).casefold()
+        approved_flavor = cat.lookup(item["flavor"], "Browse/feature/trait/dragon-knight/draconian-pride.md",
+                                      "mcdm.heroes.v1/feature.trait.dragon-knight/draconian-pride")
+        self.assertEqual(labels[flavor_key], approved_flavor[0])
+
+    def test_dragon_knight_story_links_and_ability_distances_keep_context(self):
+        from core import fingerprint
+
+        data = {
+            "format": "steel-compendium-catalog/v1",
+            "locale": "zh-TW",
+            "records": [
+                row("human", "人類", id="term.human", scope="heroes"),
+                row("dwarf", "矮人", id="term.dwarf", scope="heroes"),
+                row("burst", "爆發", id="term.burst", scope="heroes"),
+                row("cube", "立方", id="term.cube", scope="heroes"),
+                row("push", "推動", id="term.push", scope="heroes"),
+                row("1 burst", "1 爆發", id="heroes.ancestries.dragon-knight.ability.draconian-pride.distance",
+                    scope="ancestry:dragon-knight"),
+                row("3 cube within 1", "1 格內 3 立方",
+                    id="heroes.ancestries.dragon-knight.ability.dragon-breath.distance",
+                    scope="ancestry:dragon-knight"),
+                row("5 damage; push 1", "5 傷害；推動 1",
+                    id="heroes.ancestries.dragon-knight.ability.result.pride.12-16",
+                    scope="ancestry:dragon-knight"),
+                row("Three [human](../../Browse/ancestry/human.md) scouts and one "
+                    "[human](../../Browse/ancestry/human.md) guide, plus two "
+                    "[dwarf](../../Browse/ancestry/dwarf.md) allies and one "
+                    "[dwarf](../../Browse/ancestry/dwarf.md) elder.",
+                    "三名人類斥候和一名人類嚮導，另有兩名矮人同伴和一名矮人長者。",
+                    id="heroes.ancestries.dragon-knight.on-dragon-knights.paragraph.03",
+                    scope="ancestry:dragon-knight"),
+            ],
+        }
+        cat = Catalog(data)
+        story = ('<p>Three <a href="../../Browse/ancestry/human.md">human</a> scouts and one '
+                 '<a href="../../Browse/ancestry/human.md">human</a> guide, plus two '
+                 '<a href="../../Browse/ancestry/dwarf.md">dwarf</a> allies and one '
+                 '<a href="../../Browse/ancestry/dwarf.md">dwarf</a> elder.</p>')
+        rendered, hits = cat.translate_html(story, "Read/heroes/ancestries.md")
+        parsed = BeautifulSoup(rendered, "html.parser")
+        self.assertEqual([a.get_text() for a in parsed.select("p a")], ["人類", "人類", "矮人", "矮人"])
+        self.assertEqual(len({a["href"] for a in parsed.select("p a")}), 2)
+        self.assertIn("heroes.ancestries.dragon-knight.on-dragon-knights.paragraph.03",
+                      {item["record"] for item in hits})
+
+        card = ('<div class="sc-ability__cell"><div class="l">Distance</div>'
+                '<div class="v">3 <a href="../../../../rule/combat/cube/">cube</a> within 1</div></div>')
+        translated, _ = cat.translate_html(card, "Browse/ancestry/dragon-knight.md")
+        card_html = BeautifulSoup(translated, "html.parser")
+        value = card_html.select_one(".sc-ability__cell .v")
+        self.assertEqual(value.get_text(" ", strip=True), "1 格內 3 立方")
+        self.assertEqual(value.a["href"], "../../../../rule/combat/cube/")
+
+        outcome = ('<div class="sc-ability__tier"><span class="res">5 damage; '
+                   '<a href="../../../../movement/forced-movement/">push</a> 1</span></div>')
+        translated_outcome, _ = cat.translate_html(
+            outcome, "Browse/feature/ability/dragon-knight/draconian-pride.md")
+        result_html = BeautifulSoup(translated_outcome, "html.parser")
+        result = result_html.select_one(".sc-ability__tier .res")
+        self.assertEqual(result.get_text(" ", strip=True).replace("； ", "；"), "5 傷害；推動 1")
+        self.assertEqual(result.a["href"], "../../../../movement/forced-movement/")
+
+        exported = cat.translate_markdown(
+            "| **📏 3 [cube](../../../rule/combat/cube.md) within 1** | **🎯 Each enemy in the area** |",
+            "Browse/feature/ability/dragon-knight/dragon-breath.md",
+        )
+        self.assertIn("📏 1 格內 3 [立方](../../../rule/combat/cube.md)", exported)
+        exported = cat.translate_markdown(
+            "- **12-16:** 5 damage; [push](../../../movement/forced-movement.md) 1",
+            "Browse/feature/ability/dragon-knight/draconian-pride.md",
+        )
+        self.assertIn("5 傷害；[推動](../../../movement/forced-movement.md) 1", exported)
+
+    def test_dragon_knight_story_all_paragraphs_and_authored_links(self):
+        import markdown
+
+        cat = Catalog(load_catalog())
+        records = [r for r in cat.data["records"]
+                   if r["id"].startswith("heroes.ancestries.dragon-knight.on-dragon-knights.paragraph.")]
+        self.assertEqual(len(records), 37)
+        translated_ids = set()
+        link_count = 0
+        for record in records:
+            source_html = markdown.markdown(record["source"])
+            expected_hrefs = [a.get("href") for a in BeautifulSoup(source_html, "html.parser").select("a[href]")]
+            for uri in ["Read/heroes/ancestries.md", "Browse/ancestry/dragon-knight.md"]:
+                html, hits = cat.translate_html(source_html, uri)
+                parsed = BeautifulSoup(html, "html.parser")
+                self.assertIn(record["id"], {hit["record"] for hit in hits if hit["state"] == "translated"})
+                self.assertEqual([a.get("href") for a in parsed.select("a[href]")], expected_hrefs)
+                translated_ids.update(hit["record"] for hit in hits if hit["state"] == "translated")
+            link_count += len(expected_hrefs)
+        self.assertEqual(len(translated_ids), 37)
+        self.assertEqual(link_count, 20)
+
+    def test_dragon_knight_intro_typography_and_reused_signature_sentence(self):
+        cat = Catalog(load_catalog())
+        intro = ('<p>The ritual of Dracogenesis that grants the power to create a generation of '
+                 '<a href="./">dragon knights</a>—also known as draconians or '
+                 'wyrmwights—is obscure and supremely difficult for even an experienced sorcerer to '
+                 'master. Small populations of draconians in Khemhara, Higara, and Khoursir attest to '
+                 'this. Descendants of original generations created millennia ago by powerful wizards, '
+                 'they have never been numerous. A typical clutch yields only a single egg. After only '
+                 'a few generations, these draconians begin to show new adaptations like feathers or '
+                 'frilled ridges.</p>')
+        translated, hits = cat.translate_html(intro, "Browse/ancestry/dragon-knight.md")
+        parsed = BeautifulSoup(translated, "html.parser")
+        self.assertIn("heroes.ancestries.dragon-knight.description.1",
+                      {hit["record"] for hit in hits if hit["state"] == "translated"})
+        self.assertNotIn("Dracogenesis", parsed.p.get_text())
+        self.assertTrue(any(ord(char) > 127 for char in parsed.p.get_text()))
+        self.assertEqual(parsed.p.a["href"], "./")
+
+        story = ('<p>Vaantikalisax\'s reptile eyes flashed in anger. "They <em>had it</em>! Thirty years, '
+                 'and what did it amount to?! I watched Ajax... I watched him..." The '
+                 '<a href="./">dragon knight\'s</a> eyes flinched. His clawed hands tightened on his mace '
+                 'and shield. "I watched the oath... fail."</p>')
+        translated, hits = cat.translate_html(story, "Browse/ancestry/dragon-knight.md")
+        parsed = BeautifulSoup(translated, "html.parser")
+        self.assertIn("heroes.ancestries.dragon-knight.on-dragon-knights.paragraph.34",
+                      {hit["record"] for hit in hits if hit["state"] == "translated"})
+        self.assertNotIn("Vaantikalisax's reptile eyes", parsed.p.get_text())
+        self.assertEqual(parsed.p.a["href"], "./")
+
+        leadin = ('<p>You have the following <a href="../../rule/combat/signature-ability/">'
+                  'signature ability</a>.</p>')
+        translated, hits = cat.translate_html(leadin, "Browse/ancestry/dragon-knight.md")
+        parsed = BeautifulSoup(translated, "html.parser")
+        self.assertEqual(parsed.p.get_text(), "你獲得以下招牌招式。")
+        self.assertEqual(parsed.p.a["href"], "../../rule/combat/signature-ability/")
+        self.assertIn("heroes.ancestries.wode-elf.trait.the-wode-defends.effect",
+                      {hit["record"] for hit in hits if hit["state"] == "translated"})
+
+    def test_dragon_knight_card_power_roll_and_name_measurement_labels(self):
+        cat = Catalog(load_catalog())
+        card = ('<div class="sc-ability__pr-head"><span class="pre">Power Roll +</span>'
+                '<span class="chars"><a href="../../../../rule/character/might/">Might</a> or '
+                '<a href="../../../../rule/character/presence/">Presence</a></span></div>')
+        html, _ = cat.translate_html(card, "Browse/feature/ability/dragon-knight/draconian-pride.md")
+        parsed = BeautifulSoup(html, "html.parser")
+        self.assertEqual(parsed.select_one(".pre").get_text(), "檢定 +")
+        self.assertEqual(parsed.select_one(".chars").get_text(" ", strip=True), "力量 / 氣場")
+        self.assertEqual([a["href"] for a in parsed.select("a")], [
+            "../../../../rule/character/might/", "../../../../rule/character/presence/"
+        ])
+        labels = ('<h3>Dragon Knight Names</h3><strong>Feminine:</strong>'
+                  '<strong>Gender Neutral:</strong><strong>Masculine:</strong>'
+                  '<table><tr><th>Ancestry</th><th>Height in Feet/<br>Inches</th>'
+                  '<th>Weight in<br>Pounds</th><th>Life Expectancy in<br>Years</th></tr></table>')
+        translated, _ = cat.translate_html(labels, "Read/heroes/ancestries.md")
+        table = BeautifulSoup(translated, "html.parser")
+        self.assertEqual(table.h3.get_text(), "龍騎士姓名")
+        self.assertEqual([x.get_text(" ", strip=True) for x in table.select("strong")], ["女性名：", "中性名：", "男性名："])
+        self.assertEqual([x.get_text(" ", strip=True) for x in table.select("th")], [
+            "族裔", "身高（英尺／英吋）", "體重（磅）", "預期壽命（年）"
+        ])
+
+        leadin = ('<p>You have 3 ancestry points to spend on the following traits. '
+                  '(<em>Quick Build:</em> <a href="../../feature/ability/dragon-knight/dragon-breath/">'
+                  'Dragon Breath</a>, Prismatic Scales.)</p>')
+        quick, _ = cat.translate_html(leadin, "Browse/ancestry/dragon-knight.md")
+        quick_dom = BeautifulSoup(quick, "html.parser")
+        self.assertEqual(quick_dom.p.get_text("", strip=True),
+                         "你有 3 點族裔點數，可以用來購買以下特性。（速選：龍息、虹彩鱗片。）")
+        self.assertEqual(quick_dom.p.a.get_text(), "龍息")
+        self.assertEqual(quick_dom.p.a["href"], "../../feature/ability/dragon-knight/dragon-breath/")
+
     def test_devil_story_real_sources_keep_approved_prose_breaks_and_links(self):
         import markdown
         import re
