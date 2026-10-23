@@ -19,8 +19,14 @@ import markdown
 from bs4 import BeautifulSoup, Comment, NavigableString
 
 ROOT = Path(__file__).resolve().parents[2]
-BLOCKS = "p,li,td,th,h1,h2,h3,h4,h5,h6,.sc-ability__section-body,.sb__feat-body,.sc-prev__flavor"
-LABELS = "a,h1,h2,h3,h4,h5,h6,.tag,.pre,.l,.sc-head__slot,.sc-prev__tag,.sc-ability__chip,dt,th"
+BLOCKS = "p,li,td,th,h1,h2,h3,h4,h5,h6,.sc-ability__section-body,.sc-ability__tier .res,.sb__feat-body,.sc-prev__flavor"
+LABELS = "a,h1,h2,h3,h4,h5,h6,.tag,.pre,.l,.sc-head__slot,.sc-prev__tag,.sc-ability__chip,.sc-prev__chip,.sc-ability__cell .v,dt,th"
+
+
+def is_dragon_knight_ability_context(uri: str) -> bool:
+    """Ability cards are also embedded in the Dragon Knight ancestry page."""
+    return (uri.startswith("Browse/feature/ability/dragon-knight/")
+            or uri == "Browse/ancestry/dragon-knight.md")
 
 
 @lru_cache(maxsize=20000)
@@ -108,7 +114,7 @@ def scope_matches(scope: str, uri: str, scc: str = "") -> bool:
     if scope.startswith("ancestry:"):
         slug = scope.split(":", 1)[1]
         return (uri == f"Browse/ancestry/{slug}.md" or f"/{slug}/" in uri
-                or (slug == "devil" and uri == "Browse/ancestry/index.md"))
+                or (slug in {"devil", "dragon-knight"} and uri == "Browse/ancestry/index.md"))
     if scope.startswith("kit:"):
         slug = scope.split(":", 1)[1]
         return uri == f"Browse/kit/{slug}.md" or f"/{slug}/" in uri or f"/Kits/{slug}-" in uri
@@ -156,6 +162,34 @@ class Catalog:
                 # Story sources are captured as rendered text. Literal escaped
                 # cough asterisks must not be parsed as Markdown a second time;
                 # short dialogue is still a whole paragraph, not a global label.
+                self.segments[normalized(source)].append((target, record["id"], scope))
+                continue
+            if record["id"].startswith("heroes.ancestries.dragon-knight.on-dragon-knights.paragraph."):
+                # Preserve short dialogue as paragraph content and avoid treating
+                # it as a site-wide label. Master source retains authored Markdown
+                # links, while the rendered paragraph matcher sees their plain text.
+                self.segments[normalized(plain(source))].append((target, record["id"], scope))
+                continue
+            if record["id"] == "heroes.ancestries.dragon-knight.description.4":
+                self.segments[normalized(source)].append((target, record["id"], scope))
+            if record["id"] == "heroes.ancestries.dragon-knight.description.1":
+                # The upstream HTML parser adds a space after the linked label
+                # before this em dash. Keep this exact, punctuation-only alias
+                # scoped to the approved Dragon Knight description.
+                self.typographic_segments[typography_key(plain(source))].append((target, record["id"], scope))
+            if record["id"] == "heroes.ancestries.wode-elf.trait.the-wode-defends.effect":
+                # Reuse the exact shared rule sentence from its approved
+                # same-version ancestry context; the remaining source sentence
+                # is not part of this alias.
+                prefix = "You have the following signature ability."
+                if source.startswith(prefix) and target.startswith("你獲得以下招牌招式。"):
+                    self.segments[normalized(prefix)].append(("你獲得以下招牌招式。", record["id"], "ancestry:dragon-knight"))
+            if record["id"] in {
+                "heroes.ancestries.dragon-knight.ability.draconian-pride.distance",
+                "heroes.ancestries.dragon-knight.ability.dragon-breath.distance",
+            } or record["id"].startswith("heroes.ancestries.dragon-knight.ability.result."):
+                # Ability-card distance formulas are short strings, but their
+                # reordering is a scoped sentence translation, not a label.
                 self.segments[normalized(source)].append((target, record["id"], scope))
                 continue
             if record["id"] == "heroes.ancestries.devil.summary":
@@ -294,7 +328,7 @@ class Catalog:
             # children: a nested <p> is relocated by the browser's HTML parser,
             # leaving an empty heading and an unstyled title outside it.
             if (el.name in {"p", "h1", "h2", "h3", "h4", "h5", "h6"}
-                    or set(el.get("class", [])) & {"sc-card__flavor", "sc-card__blurb"}) and len(rendered.find_all("p", recursive=False)) == 1:
+                    or set(el.get("class", [])) & {"sc-card__flavor", "sc-card__blurb", "res"}) and len(rendered.find_all("p", recursive=False)) == 1:
                 rendered = rendered.p
             # Numeric/tool readers receive the untouched English source separately.
             el["data-sc-original"] = source
@@ -315,11 +349,54 @@ class Catalog:
                 for child in list(right.contents):
                     left.append(child.extract())
                 right.decompose()
+        if is_dragon_knight_ability_context(uri):
+            for head in soup.select(".sc-ability__pr-head"):
+                chars = head.select_one(".chars")
+                if not chars:
+                    continue
+                # This card tests either characteristic; use the approved
+                # Traditional Chinese separator and preserve both links.
+                for node in list(chars.find_all(string=True)):
+                    if not node.find_parent("a") and node.strip() == "or":
+                        node.replace_with(NavigableString(" / "))
+                if chars.find(True) and chars.contents and getattr(chars.contents[0], "name", None) == "a":
+                    chars.insert(0, NavigableString(" "))
+            for value in soup.select(".sc-ability__cell .v, .sc-prev--ability .sc-prev__meta .v"):
+                source = normalized(value.get_text(" ", strip=True))
+                found = self.lookup(source, uri, scc)
+                if not found:
+                    continue
+                target, record_id, _ = found
+                # Index previews emphasize numeric ranges with <b>; preserve
+                # that authored emphasis when the approved formula reorders it.
+                bold_numbers = {b.get_text(strip=True) for b in value.select("b")
+                                if b.get_text(strip=True).isdigit()}
+                if bold_numbers:
+                    target = re.sub(r"\b\d+\b", lambda m: f"**{m[0]}**" if m[0] in bold_numbers else m[0], target)
+                rendered = self._linked_target(target, value, uri, scc, record_id)
+                if rendered is None:
+                    continue
+                if bold_numbers:
+                    for emphasis in rendered.select("strong"):
+                        if emphasis.get_text() in bold_numbers:
+                            emphasis.name = "b"
+                if len(rendered.find_all("p", recursive=False)) == 1:
+                    rendered = rendered.p
+                value["data-sc-original"] = source
+                value["data-sc-l10n"] = record_id
+                value.clear()
+                for child in list(rendered.contents):
+                    value.append(child.extract())
+                hits.append({"record": record_id, "state": "translated"})
         extra_labels = []
         if uri.startswith("Browse/skill/interpersonal/"):
             extra_labels = soup.select(".sc-card__name")
         elif uri == "Browse/ancestry/index.md":
             extra_labels = [el for el in soup.select(".sc-card__name") if el.get_text(strip=True) == "Devil"]
+        elif uri == "Read/heroes/ancestries.md":
+            extra_labels = [el for el in soup.select("strong")
+                            if normalized(el.get_text(" ", strip=True)) in
+                            {"Feminine:", "Gender Neutral:", "Masculine:"}]
         for el in list(soup.select(LABELS)) + extra_labels:
             if el.parent is None or el.find_parent(["script", "template", "style", "code", "pre"]):
                 continue
@@ -327,9 +404,14 @@ class Catalog:
                 continue
             if el.find(True):  # do not flatten headings with permalinks or composite labels
                 children = [n for n in el.contents if isinstance(n, NavigableString) and not isinstance(n, Comment)]
-                if len(children) != 1:
+                if (el.name == "th" and children and
+                        all(getattr(n, "name", None) == "br" or isinstance(n, NavigableString) for n in el.contents)):
+                    source = normalized(el.get_text(" ", strip=True))
+                    children = None
+                elif len(children) != 1:
                     continue
-                source = str(children[0]).strip()
+                else:
+                    source = str(children[0]).strip()
             else:
                 children = None
                 source = el.get_text(strip=True)
@@ -339,10 +421,18 @@ class Catalog:
                     # A missing/unsafe prose translation falls back as a complete block.
                     # Standalone entity links in indexes can still use approved names.
                     continue
-            found, composite_ids = self.lookup_label(source, uri, scc)
+            label_source = source
+            category_colon = uri == "Read/heroes/ancestries.md" and source in {
+                "Feminine:", "Gender Neutral:", "Masculine:"
+            }
+            if category_colon:
+                label_source = source[:-1]
+            found, composite_ids = self.lookup_label(label_source, uri, scc)
             if not found:
                 continue
             target, record_id, _ = found
+            if category_colon:
+                target += "："
             el["data-sc-original"] = source
             el["data-sc-l10n"] = record_id
             if composite_ids:
@@ -368,9 +458,57 @@ class Catalog:
                 continue
             quote = all(not line.strip() or line.startswith(">") for line in part.splitlines())
             body = "\n".join(re.sub(r"^> ?", "", line) for line in part.splitlines()) if quote else part
+            if is_dragon_knight_ability_context(uri):
+                translated_result = []
+                result_pattern = re.compile(
+                    r"(?P<prefix>-\s*\*\*(?:≤11|12-16|17\+):\*\*\s*)"
+                    r"(?P<effect>[^\r\n]+)"
+                )
+
+                def localized_result(match):
+                    source_effect = normalized(plain(match["effect"]))
+                    found = self.lookup(source_effect, uri, scc)
+                    if not found:
+                        return match[0]
+                    translated_result.append(True)
+                    target_effect = found[0]
+                    source_push = re.search(r"\[push\]\(([^)]+)\)", match["effect"])
+                    if source_push:
+                        push = self.lookup("push", uri, scc, label=True)
+                        if push and push[0] in target_effect:
+                            target_effect = target_effect.replace(
+                                push[0], f"[{push[0]}]({source_push[1]})", 1
+                            )
+                    return match["prefix"] + target_effect
+
+                body = result_pattern.sub(localized_result, body)
+                if translated_result and not any(line.lstrip().startswith("|") for line in body.splitlines()):
+                    output.append("\n".join("> " + line if line else ">" for line in body.splitlines()) if quote else body)
+                    continue
             if any(line.lstrip().startswith("|") for line in body.splitlines()):
                 # Keep table syntax, values and destinations intact. Translate only
                 # complete linked labels, using the same scoped approved catalog.
+                if is_dragon_knight_ability_context(uri):
+                    distance_pattern = re.compile(
+                        r"(?P<outer>\*\*📏\s*)(?P<count>\d+) \[(?P<shape>burst|cube)\]"
+                        r"\((?P<href>[^)]+)\)(?: within (?P<within>\d+))?(?P<close>\*\*)"
+                    )
+
+                    def localized_distance(match):
+                        formula = f"{match['count']} {match['shape']}"
+                        if match["within"]:
+                            formula += f" within {match['within']}"
+                        found = self.lookup(formula, uri, scc)
+                        label = self.lookup(match["shape"], uri, scc, label=True)
+                        if not found or not label or label[0] not in found[0]:
+                            return match[0]
+                        translated = found[0].replace(
+                            label[0], f"[{label[0]}]({match['href']})", 1
+                        )
+                        return match["outer"] + translated + match["close"]
+
+                    body = distance_pattern.sub(localized_distance, body)
+
                 def linked_label(match):
                     found = self.lookup(plain(match[1]), uri, scc, label=True)
                     return f"[{found[0]}]({match[2]})" if found else match[0]
@@ -393,11 +531,15 @@ class Catalog:
         return "".join(output)
 
     def _ancestry_quick_build(self, element, source: str, uri: str, scc: str):
-        """Compose only the reviewed human/devil summaries from approved parts."""
+        """Compose reviewed ancestry lead-ins while retaining authored links."""
         intro_source = "You have 3 ancestry points to spend on the following traits."
-        quick_source = ("Quick Build: Beast Legs, Impressive Horns."
-                        if "Beast Legs, Impressive Horns." in source
-                        else "Quick Build: Perseverance, Staying Power.")
+        dragon_knight = (uri in {"Browse/ancestry/dragon-knight.md", "Read/heroes/ancestries.md"} and
+                         "Dragon Breath" in source and "Prismatic Scales" in source)
+        quick_source = (
+            "Quick Build: Dragon Breath, Prismatic Scales." if dragon_knight else
+            "Quick Build: Beast Legs, Impressive Horns." if "Beast Legs, Impressive Horns." in source else
+            "Quick Build: Perseverance, Staying Power."
+        )
         intro = self.lookup(intro_source, uri, scc)
         quick = self.lookup(quick_source, uri, scc)
         compact = lambda value: re.sub(r"\(\s+", "(", re.sub(r"\s+\)", ")", normalized(value)))
@@ -411,7 +553,20 @@ class Catalog:
         emphasis = fragment.new_tag("em")
         emphasis.string = prefix + "："
         fragment.append(emphasis)
-        fragment.append(NavigableString(remainder + "）"))
+        if dragon_knight:
+            link = next((a for a in element.find_all("a", href=True)
+                         if normalized(a.get_text(" ", strip=True)) == "Dragon Breath"), None)
+            translated_name = self.lookup("Dragon Breath", uri, scc, label=True)
+            if not link or not translated_name or translated_name[0] not in remainder:
+                return None
+            before, after = remainder.split(translated_name[0], 1)
+            fragment.append(NavigableString(before))
+            ability = fragment.new_tag("a", href=link["href"])
+            ability.string = translated_name[0]
+            fragment.append(ability)
+            fragment.append(NavigableString(after + "）"))
+        else:
+            fragment.append(NavigableString(remainder + "）"))
         return intro[0], [intro[1], quick[1]], fragment
 
     def _linked_target(self, target: str, source_el, uri: str, scc: str, record_id: str = ""):
@@ -457,6 +612,11 @@ class Catalog:
                     and text == "distance"
                     and link_path.endswith("/rule/combat/distance")):
                 translated = ("距離", "heroes.ancestries.human.trait.cant-take-hold.effect", "ancestry:human")
+            if (record_id in {"heroes.ancestries.dragon-knight.description.1", "heroes.ancestries.dragon-knight.description.3"}
+                    or record_id.startswith("heroes.ancestries.dragon-knight.on-dragon-knights.paragraph.")):
+                if (anchor["href"] in {".", "./"}
+                        and text.casefold() in {"dragon knight", "dragon knights", "dragon knight's"}):
+                    translated = self.lookup("Dragon Knight", uri, scc, label=True)
             # User-approved Book wording in the human introduction. Rules use 超常.
             if (record_id == "heroes.ancestries.human.description.1"
                     and text.casefold() == "supernatural"
@@ -492,7 +652,9 @@ class Catalog:
                     translated = self.lookup(slug, uri, scc, label=True)
             label = translated[0] if translated else text
             identity = (anchor["href"], label)
-            if identity in done and not record_id.startswith("heroes.ancestries.devil.on-devils.paragraph."):
+            if (identity in done
+                    and not record_id.startswith(("heroes.ancestries.devil.on-devils.paragraph.",
+                                                  "heroes.ancestries.dragon-knight.on-dragon-knights.paragraph."))):
                 continue
             done.add(identity)
             placed = False

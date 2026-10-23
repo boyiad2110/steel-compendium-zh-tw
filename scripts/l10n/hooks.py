@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from mkdocs.plugins import event_priority
 
 sys.path.insert(0, str(Path(__file__).parent))
-from core import Catalog, ROOT, classify, fingerprint, load_catalog, normalized
+from core import Catalog, ROOT, classify, fingerprint, load_catalog, normalized, plain
 
 catalog = None
 pages = []
@@ -118,7 +118,39 @@ def on_page_content(html, page, config, files):
                     continue
                 for item in items:
                     href = str(item.get("href", ""))
-                    match = re.fullmatch(r"trait/(human|devil)/([a-z0-9-]+)/?", href)
+                    ability = re.fullmatch(r"ability/dragon-knight/(draconian-pride|dragon-breath)/?", href)
+                    if ability:
+                        slug = ability.group(1)
+                        item_uri = f"Browse/feature/ability/dragon-knight/{slug}.md"
+                        item_scc = f"mcdm.heroes.v1/feature.ability.dragon-knight/{slug}"
+                        for value in [item.get("cost", ""), *item.get("keywords", []),
+                                      "Targets", "from", "Lv", "distance"]:
+                            if not value:
+                                continue
+                            found = catalog.lookup(value, item_uri, item_scc, label=True)
+                            if found:
+                                labels[normalized(value).casefold()] = found[0]
+                        for key in ("name", "flavor", "targets"):
+                            value = item.get(key, "")
+                            if not value:
+                                continue
+                            if key == "name":
+                                found, _ = catalog.lookup_label(value, item_uri, item_scc)
+                            else:
+                                found = catalog.lookup(value, item_uri, item_scc)
+                            if found:
+                                labels[normalized(value).casefold()] = found[0]
+                        distance = item.get("distance", "")
+                        formula = plain(distance) if distance else ""
+                        found = catalog.lookup(formula, item_uri, item_scc) if formula else None
+                        if found:
+                            # Keep the source card's number emphasis when the
+                            # approved formula reorders its components.
+                            translated = found[0]
+                            translated = re.sub(r"(?<!\*)\b(\d+)\b(?!\*)", r"**\1**", translated)
+                            labels[normalized(distance).casefold()] = translated
+                        continue
+                    match = re.fullmatch(r"trait/(human|devil|dragon-knight)/([a-z0-9-]+)/?", href)
                     if not match:
                         continue
                     ancestry, slug = match.groups()
@@ -128,6 +160,23 @@ def on_page_content(html, page, config, files):
                     translated_name, _ = catalog.lookup_label(name, item_uri, item_scc)
                     if translated_name:
                         labels[normalized(name).casefold()] = translated_name[0]
+                    if ancestry == "dragon-knight":
+                        trait_type = f"{item.get('klass', '')} Trait" if item.get("klass") else "Trait"
+                        translated_type, _ = catalog.lookup_label(trait_type, item_uri, item_scc)
+                        if translated_type:
+                            labels[normalized(trait_type).casefold()] = translated_type[0]
+                        options = item.get("options", 0)
+                        if options > 1:
+                            option_label = f"{options} options"
+                            translated_options, _ = catalog.lookup_label(option_label, item_uri, item_scc)
+                            if translated_options:
+                                labels[normalized(option_label).casefold()] = translated_options[0]
+                        grant = item.get("grants", "")
+                        if grant:
+                            grant_label = f"Grants {grant}"
+                            translated_grant, _ = catalog.lookup_label(grant_label, item_uri, item_scc)
+                            if translated_grant:
+                                labels[normalized(grant_label).casefold()] = translated_grant[0]
                     flavor = item.get("flavor", "")
                     translated_flavor = catalog.lookup(flavor, item_uri, item_scc)
                     if translated_flavor:

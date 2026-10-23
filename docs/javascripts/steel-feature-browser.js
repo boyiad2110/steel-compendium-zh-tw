@@ -73,14 +73,14 @@
     // The noun reflects the real type: "Trait" only for ancestry/monster traits,
     // "Feature" for the plain feature umbrella.
     var noun = it.kind === "feature" ? "Feature" : "Trait";
-    var eyebrow = esc(it.klass ? it.klass + " " + noun : noun);
+    var eyebrow = esc(display(it.klass ? it.klass + " " + noun : noun));
     if (it.subclass) eyebrow += " · " + esc(it.subclass);
     var tag = it.tag
       ? '<div class="sc-prev__tag">' + esc(display(it.tag)) + '</div>'
-      : '<div class="sc-prev__tag">Level <span class="num">' + esc(it.level) + '</span></div>';
+      : '<div class="sc-prev__tag">' + esc(display("Level")) + ' <span class="num">' + esc(it.level) + '</span></div>';
     var marker = "";
-    if (it.grants) marker = "Grants " + esc(it.grants);
-    else if (it.options > 1) marker = it.options + " options";
+    if (it.grants) marker = esc(display("Grants " + it.grants));
+    else if (it.options > 1) marker = esc(display(it.options + " options"));
     else if (it.options === 1) marker = "1 option";
     var foot = marker
       ? '<div class="sc-prev__foot"><span class="sc-prev__grant"><span class="dot"></span>' + marker + "</span></div>"
@@ -101,7 +101,7 @@
     var cost = it.cost || "";
     var costHTML = /^\d/.test(cost)
       ? cost.replace(/^(\d+)\s*/, '<span class="num">$1</span> ')
-      : esc(cost);
+      : esc(display(cost));
     var tag = cost ? '<div class="sc-prev__tag">' + costHTML + '</div>' : "";
     // keyword chips, then condition chips (SC-90) — a card filtered to "prone"
     // shows on its face why it matched. Mirrors renderAbilityPrev in
@@ -113,9 +113,9 @@
     }));
     var kw = chips.length ? '<div class="sc-prev__kw">' + chips.join("") + '</div>' : "";
     var foot = [];
-    if (ctx) foot.push(metaCell("from", esc(it.klass) + " · Lv " + it.level, true));
-    if (it.distance) foot.push(metaCell("distance", md(it.distance), true));
-    if (it.targets) foot.push(metaCell("targets", it.targets));
+    if (ctx) foot.push(metaCell(display("from"), esc(display(it.klass)) + " · " + display("Lv") + " " + it.level, true));
+    if (it.distance) foot.push(metaCell(display("distance"), md(display(it.distance)), true));
+    if (it.targets) foot.push(metaCell(display("targets"), display(it.targets)));
     var footHTML = foot.length ? '<div class="sc-prev__foot">' + foot.join("") + "</div>" : "";
     // Subclass rides the action eyebrow ("Maneuver · Black Ash"), matching the
     // trait card — abilities otherwise never surface their subclass.
@@ -126,7 +126,7 @@
         '<div class="sc-prev__titles">' +
           '<div class="sc-prev__eyebrow"><span class="sc-prev__dia"></span>' + eyebrow + '</div>' +
           '<h3 class="sc-prev__name">' + esc(display(it.name)) + '</h3></div>' + tag + '</div>' +
-      (it.flavor ? '<div class="sc-prev__flavor">' + esc(it.flavor) + '</div>' : "") +
+      (it.flavor ? '<div class="sc-prev__flavor">' + esc(display(it.flavor)) + '</div>' : "") +
       kw + footHTML + '</a>';
   }
 
