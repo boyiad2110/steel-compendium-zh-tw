@@ -607,14 +607,6 @@ class Catalog:
                 if (anchor["href"] in {".", "./"}
                         and text.casefold() in {"dragon knight", "dragon knights", "dragon knight's"}):
                     translated = self.lookup("Dragon Knight", uri, scc, label=True)
-            if record_id == "heroes.ancestries.dragon-knight.description.3":
-                # Inflected link labels use this paragraph's approved Book wording.
-                classes = {"shadows": ("shadow", "影舞者"), "censors": ("censor", "懲戒者"),
-                           "tacticians": ("tactician", "戰術家"), "elementalists": ("elementalist", "元素師")}
-                if text.casefold() in classes:
-                    slug, label = classes[text.casefold()]
-                    if link_path.endswith("/class/" + slug):
-                        translated = (label, record_id, "ancestry:dragon-knight")
             # User-approved Book wording in the human introduction. Rules use 超常.
             if (record_id == "heroes.ancestries.human.description.1"
                     and text.casefold() == "supernatural"
