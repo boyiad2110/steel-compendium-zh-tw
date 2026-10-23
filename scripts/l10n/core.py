@@ -170,6 +170,8 @@ class Catalog:
                 # links, while the rendered paragraph matcher sees their plain text.
                 self.segments[normalized(plain(source))].append((target, record["id"], scope))
                 continue
+            if record["id"] == "heroes.ancestries.dragon-knight.description.4":
+                self.segments[normalized(source)].append((target, record["id"], scope))
             if record["id"] == "heroes.ancestries.dragon-knight.description.1":
                 # The upstream HTML parser adds a space after the linked label
                 # before this em dash. Keep this exact, punctuation-only alias
@@ -326,7 +328,7 @@ class Catalog:
             # children: a nested <p> is relocated by the browser's HTML parser,
             # leaving an empty heading and an unstyled title outside it.
             if (el.name in {"p", "h1", "h2", "h3", "h4", "h5", "h6"}
-                    or set(el.get("class", [])) & {"sc-card__flavor", "sc-card__blurb"}) and len(rendered.find_all("p", recursive=False)) == 1:
+                    or set(el.get("class", [])) & {"sc-card__flavor", "sc-card__blurb", "res"}) and len(rendered.find_all("p", recursive=False)) == 1:
                 rendered = rendered.p
             # Numeric/tool readers receive the untouched English source separately.
             el["data-sc-original"] = source
@@ -368,6 +370,8 @@ class Catalog:
                 rendered = self._linked_target(target, value, uri, scc, record_id)
                 if rendered is None:
                     continue
+                if len(rendered.find_all("p", recursive=False)) == 1:
+                    rendered = rendered.p
                 value["data-sc-original"] = source
                 value["data-sc-l10n"] = record_id
                 value.clear()
@@ -519,7 +523,7 @@ class Catalog:
     def _ancestry_quick_build(self, element, source: str, uri: str, scc: str):
         """Compose reviewed ancestry lead-ins while retaining authored links."""
         intro_source = "You have 3 ancestry points to spend on the following traits."
-        dragon_knight = (uri == "Browse/ancestry/dragon-knight.md" and
+        dragon_knight = (uri in {"Browse/ancestry/dragon-knight.md", "Read/heroes/ancestries.md"} and
                          "Dragon Breath" in source and "Prismatic Scales" in source)
         quick_source = (
             "Quick Build: Dragon Breath, Prismatic Scales." if dragon_knight else
@@ -598,11 +602,19 @@ class Catalog:
                     and text == "distance"
                     and link_path.endswith("/rule/combat/distance")):
                 translated = ("距離", "heroes.ancestries.human.trait.cant-take-hold.effect", "ancestry:human")
-            if (record_id == "heroes.ancestries.dragon-knight.description.1"
+            if (record_id in {"heroes.ancestries.dragon-knight.description.1", "heroes.ancestries.dragon-knight.description.3"}
                     or record_id.startswith("heroes.ancestries.dragon-knight.on-dragon-knights.paragraph.")):
                 if (anchor["href"] in {".", "./"}
                         and text.casefold() in {"dragon knight", "dragon knights", "dragon knight's"}):
                     translated = self.lookup("Dragon Knight", uri, scc, label=True)
+            if record_id == "heroes.ancestries.dragon-knight.description.3":
+                # Inflected link labels use this paragraph's approved Book wording.
+                classes = {"shadows": ("shadow", "影舞者"), "censors": ("censor", "懲戒者"),
+                           "tacticians": ("tactician", "戰術家"), "elementalists": ("elementalist", "元素師")}
+                if text.casefold() in classes:
+                    slug, label = classes[text.casefold()]
+                    if link_path.endswith("/class/" + slug):
+                        translated = (label, record_id, "ancestry:dragon-knight")
             # User-approved Book wording in the human introduction. Rules use 超常.
             if (record_id == "heroes.ancestries.human.description.1"
                     and text.casefold() == "supernatural"

@@ -17,6 +17,29 @@ def row(source, target, kind="strings", scope="heroes", status="APPROVED", id="t
 
 
 class LocalizationTests(unittest.TestCase):
+    def test_dragon_knight_real_browse_and_read_prose_stays_in_sync(self):
+        import markdown
+        cat = Catalog(load_catalog())
+        root = Path(__file__).resolve().parents[1]
+        for uri in ("Browse/ancestry/dragon-knight.md", "Read/heroes/ancestries.md"):
+            source = (root / "docs" / uri).read_text(encoding="utf-8").split("---", 2)[-1]
+            translated, _ = cat.translate_html(markdown.markdown(source, extensions=["tables"]), uri)
+            soup = BeautifulSoup(translated, "html.parser")
+            self.assertNotIn("Knighthood was a title carried", soup.get_text())
+            self.assertNotIn("Then Ajax came.", soup.get_text())
+            lead = next(p for p in soup.select(".sc-trait__leadin") if "虹彩鱗片" in p.get_text())
+            self.assertIn("你有 3 點族裔點數", lead.get_text())
+            self.assertEqual(lead.a.get_text(), "龍息")
+
+    def test_localized_card_fields_keep_inline_markup(self):
+        cat = Catalog(load_catalog())
+        source = ('<div class="sc-ability__cell"><div class="v">1 burst</div></div>'
+                  '<div class="sc-ability__tier"><span class="res">2 damage</span></div>')
+        result, _ = cat.translate_html(source, "Browse/ancestry/dragon-knight.md")
+        soup = BeautifulSoup(result, "html.parser")
+        self.assertFalse(soup.select(".v p, .res p"))
+        self.assertEqual(soup.select_one(".res").get_text(), "2 傷害")
+
     def test_approved_dragon_knight_text_reaches_ancestry_and_feature_indexes(self):
         from types import SimpleNamespace
         from core import normalized, scope_matches
