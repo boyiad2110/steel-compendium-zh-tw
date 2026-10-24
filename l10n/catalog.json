@@ -8,19 +8,19 @@
   "master": {
     "spreadsheetId": "1RvYstzyZWqQfXDPnTwQUscSd-UJZK6uCFEOVg0Q931c",
     "url": "https://docs.google.com/spreadsheets/d/1RvYstzyZWqQfXDPnTwQUscSd-UJZK6uCFEOVg0Q931c/edit",
-    "approvedRecords": 1979,
+    "approvedRecords": 1980,
     "bookVersion": "1.01b",
     "readbackVerified": true,
-    "modifiedTime": "2026-10-24T17:30:21.574Z",
-    "captureNote": "Approved-only SC Master readback; Records through row 1910 and UI through row 81; B06 story, names, and scoped UI added; 6 existing B03/B04 UI contexts refreshed; 1979 approved records.",
+    "modifiedTime": "2026-10-24T18:25:09.614Z",
+    "captureNote": "Approved-only SC Master readback; Records through row 1910 and UI through row 82; B06 story, names, scoped UI, and trait-index option count added; 6 existing B03/B04 UI contexts refreshed; 1980 approved records.",
     "deltaReadback": {
       "ranges": [
         "Records!A1876:L1910",
         "UI!A32:L42",
-        "UI!A73:L81"
+        "UI!A73:L82"
       ],
       "verified": true,
-      "capturedAt": "2026-10-25T01:34:59.536897+08:00"
+      "capturedAt": "2026-10-25T02:35:24.975719+08:00"
     }
   },
   "records": [
@@ -29658,6 +29658,21 @@
       "reference": "Steel Compendium UI — B06; user-approved 2026-10-25",
       "bookVersion": "",
       "context": "User approved B06 display text 2026-10-25; High Elf only; apply to the named trait/measurement/name section."
+    },
+    {
+      "id": "ui.high-elf.card.options-count",
+      "kind": "ui",
+      "source": "2 options",
+      "target": "2 個選項",
+      "status": "APPROVED",
+      "scope": "ancestry:high-elf",
+      "sourceHash": "76a069290b49cad5de9efe919fbf9a848c7bb1b8178831dbce0898e639842510",
+      "sourceRecordId": "",
+      "sourceSheetId": "",
+      "reference": "Steel Compendium UI — B06; user-approved 2026-10-25",
+      "bookVersion": "",
+      "context": "User approved B06 display text 2026-10-25; High Elf only; option-count label on static and dynamic trait collection cards.",
+      "approvalBasis": "Independent Master APPROVED"
     }
   ]
 }

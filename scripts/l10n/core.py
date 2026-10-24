@@ -415,6 +415,13 @@ class Catalog:
                      if ((el.get("class") and "sc-card__name" in el["class"])
                          or is_wode_preview_flavor)
                      else self.lookup(source, uri, scc))
+            if (not found and uri == "Browse/feature/trait/index.md"
+                    and el.get("class") and "sc-folder__name" in el["class"]
+                    and source.casefold() == "high elf"
+                    and el.find_parent("a", href="high-elf/")):
+                # The trait index is outside the ancestry route; reuse the
+                # approved name only for the exact High Elf folder link.
+                found = self.lookup("High Elf", "Browse/ancestry/high-elf.md", scc, label=True)
             # Some exact, approved Wode UI labels also occur as standalone
             # trait-body prose. Match them only on Wode surfaces and only by
             # exact scoped lookup; ordinary prose remains segment-only.
@@ -752,7 +759,10 @@ class Catalog:
     def _ancestry_quick_build(self, element, source: str, uri: str, scc: str):
         """Compose reviewed ancestry lead-ins while retaining authored links."""
         intro_source = "You have 3 ancestry points to spend on the following traits."
-        high_elf = uri in {"Browse/ancestry/high-elf.md", "Read/heroes/ancestries.md"} and "High Senses, Otherworldly Grace." in source
+        high_elf = uri in {
+            "Browse/ancestry/high-elf.md", "Browse/feature/trait/high-elf/high-elf-traits.md",
+            "Read/heroes/ancestries.md",
+        } and "High Senses, Otherworldly Grace." in source
         dragon_knight = (uri in {"Browse/ancestry/dragon-knight.md", "Read/heroes/ancestries.md"} and
                          "Dragon Breath" in source and "Prismatic Scales" in source)
         quick_source = (
@@ -772,6 +782,12 @@ class Catalog:
             return None
         prefix, remainder = re.split(r"[:：]", quick[0], maxsplit=1)
         fragment = BeautifulSoup("", "html.parser")
+        marker = element.find(class_="sc-trait__dia", recursive=False)
+        if marker:
+            copied_marker = fragment.new_tag(marker.name)
+            for name, value in marker.attrs.items():
+                copied_marker[name] = value
+            fragment.append(copied_marker)
         fragment.append(NavigableString(intro[0] + "（"))
         emphasis = fragment.new_tag("em")
         emphasis.string = prefix + "："

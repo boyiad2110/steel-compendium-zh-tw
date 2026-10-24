@@ -382,13 +382,21 @@ class LocalizationTests(unittest.TestCase):
         self.assertEqual(scoped["dwarf"]["1 point"], "1 費")
         self.assertEqual(scoped["high-elf"]["1 point"], "1 費")
         self.assertEqual(scoped["high-elf"]["signature trait"], "招牌特性")
-        self.assertNotIn("2 options", scoped["high-elf"])
+        self.assertEqual(scoped["high-elf"]["2 options"], "2 個選項")
 
     def test_high_elf_static_trait_index_and_independent_trait_pages(self):
         import markdown
         from collections import Counter
         root = Path(__file__).resolve().parents[1]
         cat = Catalog(load_catalog())
+        folder_uri = "Browse/feature/trait/index.md"
+        folder_source = (root / "docs" / folder_uri).read_text(encoding="utf-8")
+        folder_html = markdown.markdown(folder_source, extensions=["tables"])
+        folder_translated, folder_hits = cat.translate_html(folder_html, folder_uri)
+        folder_soup = BeautifulSoup(folder_translated, "html.parser")
+        high_elf_folder = folder_soup.select_one('.sc-folder[href="high-elf/"] .sc-folder__name')
+        self.assertEqual(high_elf_folder.get_text(" ", strip=True), "高等精靈")
+        self.assertTrue(high_elf_folder.get("data-sc-l10n"))
         index_uri = "Browse/feature/trait/high-elf/index.md"
         index_source = (root / "docs" / index_uri).read_text(encoding="utf-8")
         index_html, _ = cat.translate_html(markdown.markdown(index_source, extensions=["tables"]), index_uri)
@@ -398,7 +406,22 @@ class LocalizationTests(unittest.TestCase):
         self.assertEqual(names, ["恐怖魅術", "優雅撤離", "招牌特性：高等精靈魅術", "高等精靈特性",
                                  "敏銳感官", "非凡優雅", "重溫記憶", "頑強心智"])
         overview = next(card for card in cards if card.get("href", "").endswith("high-elf-traits/"))
-        self.assertEqual(overview.select_one(".sc-prev__grant").get_text(" ", strip=True), "2 options")
+        self.assertEqual(overview.select_one(".sc-prev__grant").get_text(" ", strip=True), "2 個選項")
+
+        collection_uri = "Browse/feature/trait/high-elf/high-elf-traits.md"
+        collection_source = (root / "docs" / collection_uri).read_text(encoding="utf-8")
+        collection_html = markdown.markdown(collection_source.split("---", 2)[-1], extensions=["tables", "attr_list"])
+        collection_translated, collection_hits = cat.translate_html(collection_html, collection_uri)
+        collection_soup = BeautifulSoup(collection_translated, "html.parser")
+        leadin = collection_soup.select(".sc-trait__leadin")[1]
+        self.assertIsNotNone(leadin.select_one(".sc-trait__dia"))
+        self.assertIn("你有 3 點族裔點數，可以用來購買以下特性。", leadin.get_text(" ", strip=True))
+        self.assertIn("速選：敏銳感官、非凡優雅。", "".join(leadin.stripped_strings))
+        self.assertNotIn("You have 3 ancestry points", leadin.get_text(" ", strip=True))
+        self.assertNotIn("Quick Build", leadin.get_text(" ", strip=True))
+        self.assertEqual(collection_soup.select_one(".sc-trait__leadin em").get_text(strip=True), "速選：")
+        self.assertTrue(any(hit["record"] == "heroes.ancestries.high-elf.purchased.intro" for hit in collection_hits))
+        self.assertTrue(any(hit["record"] == "heroes.ancestries.high-elf.quick-build" for hit in collection_hits))
 
         expected_effects = {
             "glamor-of-terror": "heroes.ancestries.high-elf.trait.glamor-of-terror.effect",
