@@ -188,7 +188,7 @@ def on_page_content(html, page, config, files):
                             if translated_grant:
                                 labels[normalized(grant_label).casefold()] = translated_grant[0]
                     flavor = item.get("flavor", "")
-                    translated_flavor = catalog.lookup(flavor, item_uri, item_scc)
+                    translated_flavor = catalog.lookup_label(flavor, item_uri, item_scc)[0]
                     if translated_flavor:
                         labels[normalized(flavor).casefold()] = translated_flavor[0]
                     if ((ancestry, slug) in {("human", "detect-the-supernatural"), ("devil", "silver-tongue"),

@@ -351,6 +351,9 @@ class LocalizationTests(unittest.TestCase):
         self.assertIn("The Wode Defends", ability["name"])
         self.assertEqual(labels["wode elf trait"], "幻林精靈特性")
         self.assertEqual(labels["one creature"], "1 個生物")
+        self.assertEqual(labels["you have speed 6."], "你的速度為 6。")
+        self.assertEqual(labels["you have the following signature ability. signature abilities can be used at will."],
+                         "你獲得以下招牌招式。招牌招式可以隨意使用。")
         self.assertEqual(labels["signature"], "招牌")
         self.assertEqual(labels["ranged **10**"], "遠程 **10**")
 
@@ -367,6 +370,9 @@ class LocalizationTests(unittest.TestCase):
             source = (root / "docs" / uri).read_text(encoding="utf-8")
             body = source.split("---", 2)[-1] if source.startswith("---") else source
             rendered = markdown.markdown(body, extensions=["tables", "attr_list"])
+            if uri == "Browse/ancestry/wode-elf.md":
+                # MkDocs rewrites ancestry self-links to ./ before the plugin hook.
+                rendered = rendered.replace('href="wode-elf.md"', 'href="./"')
             translated, hits = cat.translate_html(rendered, uri)
             source_soup = BeautifulSoup(rendered, "html.parser")
             soup = BeautifulSoup(translated, "html.parser")
@@ -379,6 +385,10 @@ class LocalizationTests(unittest.TestCase):
                 if sibling.name == "p":
                     paragraphs.append(sibling)
             self.assertEqual(len(paragraphs), 38, uri)
+            self.assertTrue(all(p.get("data-sc-l10n") for p in paragraphs), uri)
+            self.assertFalse(any(hit["state"] == "link-adaptation-required"
+                                 and hit["record"].startswith("heroes.ancestries.wode-elf.")
+                                 for hit in hits), uri)
             self.assertIn("然後轉身大步離開", paragraphs[30].get_text(" ", strip=True), uri)
             self.assertIn("我們要去哪裡", paragraphs[31].get_text(" ", strip=True), uri)
             self.assertIn("傑瑞米湊近達德", paragraphs[36].get_text(" ", strip=True), uri)
@@ -406,6 +416,45 @@ class LocalizationTests(unittest.TestCase):
         self.assertTrue(all(a.get("href") for h in soup.select("h5")
                             if h.get_text(" ", strip=True) == "幻林精靈姓名"
                             for a in h.select("a[href]")))
+
+    def test_wode_read_scope_includes_trait_subheadings_and_embedded_card_labels(self):
+        import markdown
+        root = Path(__file__).resolve().parents[1]
+        cat = Catalog(load_catalog())
+        source = (root / "docs/Read/heroes/ancestries.md").read_text(encoding="utf-8")
+        rendered = markdown.markdown(source, extensions=["tables", "attr_list"])
+        translated, hits = cat.translate_html(rendered, "Read/heroes/ancestries.md")
+        soup = BeautifulSoup(translated, "html.parser")
+        wode_section = next(h for h in soup.select("h2")
+                            if h.get("data-scc") == "mcdm.heroes.v1/ancestry/wode-elf")
+        wode_paragraphs = [p for p in soup.select("p")
+                           if cat._read_section_is_wode(soup, p)
+                           and not p.find_parent(["template", "script", "style"])]
+        wode_cells = [value for value in soup.select(".sc-ability__cell .v")
+                      if cat._read_section_is_wode(soup, value)]
+        wode_text = " ".join(p.get_text(" ", strip=True) for p in wode_paragraphs)
+        compact_wode = "".join(wode_text.split())
+        self.assertIn("你的速度為6。", compact_wode)
+        self.assertIn("你獲得以下招牌招式。招牌招式可以隨意使用。", compact_wode)
+        self.assertIn("1個生物", "".join("".join(v.get_text(" ", strip=True).split()) for v in wode_cells))
+        self.assertNotIn("You have speed 6.", wode_text)
+        self.assertTrue(any(h["record"] == "heroes.ancestries.wode-elf.trait.swift.effect"
+                            and h["state"] == "translated" for h in hits))
+        expected_records = {
+            "heroes.ancestries.wode-elf.signature.wode-elf-glamor.effect",
+            "heroes.ancestries.wode-elf.trait.forest-walk.effect",
+            "heroes.ancestries.wode-elf.trait.quick-and-brutal.effect",
+            "heroes.ancestries.wode-elf.trait.otherworldly-grace.effect",
+            "heroes.ancestries.wode-elf.trait.revisit-memory.effect",
+            "heroes.ancestries.wode-elf.trait.swift.effect",
+            "heroes.ancestries.wode-elf.trait.the-wode-defends.effect",
+        }
+        translated_records = {h["record"] for h in hits if h["state"] == "translated"}
+        self.assertTrue(expected_records.issubset(translated_records))
+        # The same exact short label must not leak into a different ancestry.
+        high_elf = next(h for h in wode_section.find_all_next("h2"))
+        high_elf_copy = high_elf.find_next("p")
+        self.assertFalse(cat._read_section_is_wode(soup, high_elf_copy))
 
     def test_wode_complete_ability_page_uses_approved_results_and_keeps_links(self):
         import markdown
@@ -824,6 +873,9 @@ class LocalizationTests(unittest.TestCase):
                 start = re.search(r"^## Wode Elf \{", source, flags=re.M).start()
                 section = source[start:].split("### On Wode Elves", 1)[0]
             rendered = markdown.markdown(section, extensions=["tables", "attr_list"])
+            if uri.startswith("Browse/"):
+                # Reproduce MkDocs' rewritten root-relative ancestry self-links.
+                rendered = rendered.replace('href="wode-elf.md"', 'href="./"')
             html, hits = cat.translate_html(rendered, uri)
             translated = {hit["record"] for hit in hits if hit["state"] == "translated"}
             self.assertTrue(expected.issubset(translated), uri)
@@ -832,6 +884,9 @@ class LocalizationTests(unittest.TestCase):
             self.assertEqual(Counter(a["href"] for a in soup.select("a[href]")),
                              Counter(a["href"] for a in BeautifulSoup(rendered, "html.parser").select("a[href]")))
             self.assertFalse(any(hit["state"] == "link-adaptation-required" for hit in hits), uri)
+            self.assertTrue(all("Children of the sylvan" not in p.get_text(" ", strip=True)
+                                and "natural ability to mask" not in p.get_text(" ", strip=True)
+                                for p in soup.select("p[data-sc-original]")), uri)
 
     def test_approved_on_humans_story_all_paragraphs_and_narrative_links(self):
         import markdown

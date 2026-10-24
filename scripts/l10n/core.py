@@ -403,6 +403,11 @@ class Catalog:
                      if ((el.get("class") and "sc-card__name" in el["class"])
                          or is_wode_preview_flavor)
                      else self.lookup(source, uri, scc))
+            # Some exact, approved Wode UI labels also occur as standalone
+            # trait-body prose. Match them only on Wode surfaces and only by
+            # exact scoped lookup; ordinary prose remains segment-only.
+            if not found and is_wode_ability_context(uri):
+                found = self.lookup_label(source, uri, scc)[0]
             if not found:
                 continue
             target, record_id, _ = found
@@ -489,10 +494,10 @@ class Catalog:
                 hits.append({"record": record_id, "state": "translated"})
         if is_wode_ability_context(uri):
             for value in soup.select(".sc-ability__cell .v, .sc-prev--ability .sc-prev__meta .v"):
+                if uri == "Read/heroes/ancestries.md":
+                    self._active_read_wode_section = self._read_section_is_wode(soup, value)
                 source = normalized(value.get_text(" ", strip=True))
-                found = (self.lookup_label(source, uri, scc)[0]
-                         if value.find_parent(class_="sc-prev--ability")
-                         else self.lookup(source, uri, scc))
+                found = self.lookup_label(source, uri, scc)[0]
                 if not found:
                     continue
                 target, record_id, _ = found
@@ -576,18 +581,22 @@ class Catalog:
 
     @staticmethod
     def _read_section_is_wode(soup, element) -> bool:
-        current_title = normalized(element.get_text(" ", strip=True)).casefold()
-        if re.fullmatch(r"h[1-6]", element.name or "") and ("wode elf" in current_title or "wode elves" in current_title):
+        heading_pattern = re.compile(r"^h[1-6]$")
+        current_title = normalized(element.get("data-sc-original") or element.get_text(" ", strip=True)).casefold()
+        if heading_pattern.fullmatch(element.name or "") and ("wode elf" in current_title or "wode elves" in current_title):
             return True
-        nodes = list(soup.find_all(True))
-        try:
-            position = nodes.index(element)
-        except ValueError:
-            return False
-        for node in reversed(nodes[:position]):
-            if re.fullmatch(r"h[1-6]", node.name or ""):
-                title = normalized(node.get_text(" ", strip=True)).casefold()
-                return "wode elf" in title or "wode elves" in title
+        node = element.find_previous(heading_pattern)
+        while node:
+            title = normalized(node.get("data-sc-original") or node.get_text(" ", strip=True)).casefold()
+            if node.name == "h5" and title == "wode elf names":
+                return True
+            # Read uses one h2 boundary per ancestry, then h3/h4 headings for
+            # stories and individual traits. Looking only at the nearest heading
+            # silently disables Wode translations below headings like "Swift".
+            if node.name == "h2":
+                section_id = node.get("data-scc", "")
+                return section_id == "mcdm.heroes.v1/ancestry/wode-elf" or title == "wode elf"
+            node = node.find_previous(heading_pattern)
         return False
 
     def translate_markdown(self, source: str, uri: str, scc: str = "") -> str:
@@ -808,9 +817,18 @@ class Catalog:
                 # The approved formula localizes the range label as 遠程; keep
                 # the authored rule link on that word in all ability surfaces.
                 translated = ("遠程", record_id, "ancestry:wode-elf")
+            if (record_id.startswith("heroes.ancestries.wode-elf.")
+                    and text.casefold() in {"wode elf", "wode elves", "wode elf's", "wode elves'"}
+                    and (anchor["href"] in {".", "./", "wode-elf.md"}
+                         or link_path == "wode-elf" or link_path.endswith("/Browse/ancestry/wode-elf"))):
+                # These user-approved Wode paragraphs use the same Chinese
+                # ancestry name for singular, plural, and possessive source links.
+                translated = self.lookup("Wode Elf", uri, scc, label=True)
             if (record_id == "heroes.ancestries.wode-elf.on-wode-elves.paragraph.34"
                     and text.casefold() == "turn" and link_path.endswith("/rule/combat/turn")):
-                translated = ("序", record_id, "ancestry:wode-elf")
+                # The approved sentence says 依序指向; keep the rule link on
+                # the translated adverb rather than the isolated character 序.
+                translated = ("依序", record_id, "ancestry:wode-elf")
             if (record_id == "heroes.ancestries.wode-elf.on-wode-elves.paragraph.35"
                     and text.casefold() in {"test", "tests"} and link_path.endswith("/rule/test/test")):
                 translated = ("考驗", record_id, "ancestry:wode-elf")
