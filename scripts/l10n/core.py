@@ -29,6 +29,11 @@ def is_dragon_knight_ability_context(uri: str) -> bool:
             or uri == "Browse/ancestry/dragon-knight.md")
 
 
+def is_wode_ability_context(uri: str) -> bool:
+    return (uri.startswith(("Browse/feature/ability/wode-elf/", "Browse/feature/trait/wode-elf/"))
+            or uri in {"Browse/ancestry/wode-elf.md", "Read/heroes/ancestries.md"})
+
+
 @lru_cache(maxsize=20000)
 def plain(value: str) -> str:
     return BeautifulSoup(markdown.markdown(value, extensions=["tables"]), "lxml").get_text(" ", strip=True)
@@ -114,7 +119,8 @@ def scope_matches(scope: str, uri: str, scc: str = "") -> bool:
     if scope.startswith("ancestry:"):
         slug = scope.split(":", 1)[1]
         return (uri == f"Browse/ancestry/{slug}.md" or f"/{slug}/" in uri
-                or (slug in {"devil", "dragon-knight", "dwarf"} and uri == "Browse/ancestry/index.md"))
+                or (slug in {"devil", "dragon-knight", "dwarf", "wode-elf"}
+                    and uri == "Browse/ancestry/index.md"))
     if scope.startswith("kit:"):
         slug = scope.split(":", 1)[1]
         return uri == f"Browse/kit/{slug}.md" or f"/{slug}/" in uri or f"/Kits/{slug}-" in uri
@@ -175,6 +181,11 @@ class Catalog:
                 # Master text retains authored links; matching uses rendered text.
                 self.segments[normalized(plain(source))].append((target, record["id"], scope))
                 continue
+            if record["id"].startswith("heroes.ancestries.wode-elf.on-wode-elves.paragraph."):
+                # Wode Elf story entries retain authored links in the Master;
+                # match the exact rendered paragraph text only in its section.
+                self.segments[normalized(plain(source))].append((target, record["id"], scope))
+                continue
             if record["id"] == "heroes.ancestries.dragon-knight.description.4":
                 self.segments[normalized(source)].append((target, record["id"], scope))
             if record["id"] == "heroes.ancestries.dwarf.description.2":
@@ -191,12 +202,20 @@ class Catalog:
                 # before this em dash. Keep this exact, punctuation-only alias
                 # scoped to the approved Dragon Knight description.
                 self.typographic_segments[typography_key(plain(source))].append((target, record["id"], scope))
+            if record["id"] == "heroes.ancestries.wode-elf.description.2":
+                # The authored self-link is immediately followed by a possessive
+                # apostrophe; Markdown parsing inserts a space at that boundary.
+                # Register only the observed exact variant for this description.
+                source_text = normalized(plain(source))
+                linked_variant = source_text.replace(
+                    "wode elves' natural ability", "wode elves ' natural ability", 1
+                )
+                self.typographic_segments[typography_key(linked_variant)].append((target, record["id"], scope))
             if record["id"] == "heroes.ancestries.wode-elf.trait.the-wode-defends.effect":
-                # Reuse the exact shared rule sentence from its approved
-                # same-version ancestry context; the remaining source sentence
-                # is not part of this alias.
+                # Preserve the existing Dragon Knight first-sentence alias.
+                # The newly approved at-will sentence is only registered for Wode Elf.
                 prefix = "You have the following signature ability."
-                if source.startswith(prefix) and target.startswith("你獲得以下招牌招式。"):
+                if source.startswith(prefix):
                     self.segments[normalized(prefix)].append(("你獲得以下招牌招式。", record["id"], "ancestry:dragon-knight"))
             if record["id"] in {
                 "heroes.ancestries.dragon-knight.ability.draconian-pride.distance",
@@ -204,6 +223,12 @@ class Catalog:
             } or record["id"].startswith("heroes.ancestries.dragon-knight.ability.result."):
                 # Ability-card distance formulas are short strings, but their
                 # reordering is a scoped sentence translation, not a label.
+                self.segments[normalized(source)].append((target, record["id"], scope))
+                continue
+            if (record["id"].startswith("heroes.ancestries.wode-elf.ability.the-wode-defends.tier")
+                    or record["id"] == "heroes.ancestries.wode-elf.ability.the-wode-defends.distance"):
+                # These formulas are rendered as plain ability-result blocks;
+                # links stay in the approved target and retain their source href.
                 self.segments[normalized(source)].append((target, record["id"], scope))
                 continue
             if record["id"] == "heroes.ancestries.devil.summary":
@@ -270,20 +295,24 @@ class Catalog:
 
         # Read's ancestry overview combines the approved ancestry name and
         # summary in one bold-label paragraph, unlike the standalone Browse page.
-        dwarf_name = by_id.get("heroes.ancestries.dwarf.name")
-        dwarf_summary = by_id.get("heroes.ancestries.dwarf.summary")
-        if dwarf_name and dwarf_summary:
-            scope = dwarf_summary.get("scope") or record_scope(dwarf_summary)
-            source = f"{dwarf_name['source']}: {dwarf_summary['source']}"
-            target = f"**{dwarf_name['target']}：** {dwarf_summary['target']}"
-            self.segments[normalized(source)].append((target, dwarf_summary["id"], scope))
+        for ancestry in ("dwarf", "dragon-knight", "wode-elf"):
+            name = by_id.get(f"heroes.ancestries.{ancestry}.name")
+            summary = by_id.get(f"heroes.ancestries.{ancestry}.summary")
+            if name and summary:
+                scope = summary.get("scope") or record_scope(summary)
+                source = f"{name['source']}: {summary['source']}"
+                target = f"**{name['target']}：** {summary['target']}"
+                self.segments[normalized(source)].append((target, summary["id"], scope))
 
     def lookup(self, source: str, uri: str, scc: str = "", label: bool = False):
         key = normalized(source)
         choices = (self.labels.get(key.casefold(), []) if label else self.segments.get(key, []))
         if not choices and not label:
             choices = self.typographic_segments.get(typography_key(source), [])
-        allowed = [x for x in choices if scope_matches(x[2], uri, scc)]
+        allowed = [x for x in choices if scope_matches(x[2], uri, scc)
+                   and not (uri == "Read/heroes/ancestries.md"
+                            and x[1].startswith(("heroes.ancestries.wode-elf.", "ui.wode-elf."))
+                            and not getattr(self, "_active_read_wode_section", False))]
         # Conflicting approved translations never resolve by arbitrary row order.
         targets = {x[0] for x in allowed}
         return allowed[0] if len(targets) == 1 else None
@@ -315,6 +344,31 @@ class Catalog:
     def translate_html(self, content: str, uri: str, scc: str = "") -> tuple[str, list[dict]]:
         soup = BeautifulSoup(content, "lxml")
         hits = []
+        if uri in {"Browse/ancestry/wode-elf.md", "Read/heroes/ancestries.md"}:
+            # The approved story copy joins these two adjacent source paragraphs.
+            for left in list(soup.find_all("p")):
+                right = left.find_next_sibling("p")
+                if (right and normalized(left.get_text(" ", strip=True)).startswith('"You say? Well,')
+                        and normalized(right.get_text(" ", strip=True)).startswith("Llyander turned and marched off.")):
+                    self._active_read_wode_section = (uri != "Read/heroes/ancestries.md"
+                                                       or self._read_section_is_wode(soup, left))
+                    combined = normalized(left.get_text(" ", strip=True) + " " + right.get_text(" ", strip=True))
+                    found = self.lookup(combined, uri, scc)
+                    if found:
+                        target, record_id, _ = found
+                        rendered = self._linked_target(target, left, uri, scc, record_id)
+                        if rendered is not None:
+                            if len(rendered.find_all("p", recursive=False)) == 1:
+                                rendered = rendered.p
+                            left["data-sc-original"] = combined
+                            left["data-sc-l10n"] = record_id
+                            left["data-sc-l10n-records"] = record_id
+                            left.clear()
+                            for child in list(rendered.contents):
+                                left.append(child.extract())
+                            right.decompose()
+                            hits.append({"record": record_id, "state": "translated"})
+                    break
         # Containers first; descendants are not independently replaced afterwards.
         blocks = list(soup.select(BLOCKS))
         if uri == "Browse/ancestry/index.md":
@@ -326,6 +380,8 @@ class Catalog:
                 continue
             if el.get("data-sc-l10n") or el.find_parent(attrs={"data-sc-l10n": True}):
                 continue
+            self._active_read_wode_section = (uri == "Read/heroes/ancestries.md"
+                                               and self._read_section_is_wode(soup, el))
             if el.select("table,.sc-ability,.sb-wrap,h1,h2,h3,h4,h5,h6"):
                 continue
             if el.get("class") and "chars" in el["class"]:
@@ -342,9 +398,17 @@ class Catalog:
                     el.append(child.extract())
                 hits.extend({"record": record_id, "state": "translated"} for record_id in record_ids)
                 continue
+            is_wode_preview_flavor = (is_wode_ability_context(uri) and el.get("class")
+                                      and "sc-prev__flavor" in el["class"])
             found = (self.lookup_label(source, uri, scc)[0]
-                     if el.get("class") and "sc-card__name" in el["class"]
+                     if ((el.get("class") and "sc-card__name" in el["class"])
+                         or is_wode_preview_flavor)
                      else self.lookup(source, uri, scc))
+            # Some exact, approved Wode UI labels also occur as standalone
+            # trait-body prose. Match them only on Wode surfaces and only by
+            # exact scoped lookup; ordinary prose remains segment-only.
+            if not found and is_wode_ability_context(uri):
+                found = self.lookup_label(source, uri, scc)[0]
             if not found:
                 continue
             target, record_id, _ = found
@@ -354,7 +418,8 @@ class Catalog:
                 continue
             # This approved narrative has dialogue breaks and a scene separator
             # within individual source paragraphs. Keep valid sibling blocks.
-            if (record_id.startswith("heroes.ancestries.devil.on-devils.paragraph.")
+            if (record_id.startswith(("heroes.ancestries.devil.on-devils.paragraph.",
+                                      "heroes.ancestries.wode-elf.on-wode-elves.paragraph."))
                     and el.name == "p" and len(list(rendered.children)) > 1):
                 for child in list(rendered.contents):
                     if getattr(child, "name", None):
@@ -428,6 +493,34 @@ class Catalog:
                 for child in list(rendered.contents):
                     value.append(child.extract())
                 hits.append({"record": record_id, "state": "translated"})
+        if is_wode_ability_context(uri):
+            for value in soup.select(".sc-ability__cell .v, .sc-prev--ability .sc-prev__meta .v, .sc-ability__pr-head .chars"):
+                if uri == "Read/heroes/ancestries.md":
+                    self._active_read_wode_section = self._read_section_is_wode(soup, value)
+                source = normalized(value.get_text(" ", strip=True))
+                found = self.lookup_label(source, uri, scc)[0]
+                if not found:
+                    continue
+                target, record_id, _ = found
+                bold_numbers = {b.get_text(strip=True) for b in value.select("b")
+                                if b.get_text(strip=True).isdigit()}
+                if bold_numbers:
+                    target = re.sub(r"\b\d+\b", lambda m: f"**{m[0]}**" if m[0] in bold_numbers else m[0], target)
+                rendered = self._linked_target(target, value, uri, scc, record_id)
+                if rendered is None:
+                    continue
+                if bold_numbers:
+                    for emphasis in rendered.select("strong"):
+                        if emphasis.get_text() in bold_numbers:
+                            emphasis.name = "b"
+                if len(rendered.find_all("p", recursive=False)) == 1:
+                    rendered = rendered.p
+                value["data-sc-original"] = source
+                value["data-sc-l10n"] = record_id
+                value.clear()
+                for child in list(rendered.contents):
+                    value.append(child.extract())
+                hits.append({"record": record_id, "state": "translated"})
         extra_labels = []
         if uri.startswith("Browse/skill/interpersonal/"):
             extra_labels = soup.select(".sc-card__name")
@@ -442,6 +535,8 @@ class Catalog:
                 continue
             if el.get("data-sc-l10n") or el.find_parent(attrs={"data-sc-l10n": True}):
                 continue
+            self._active_read_wode_section = (uri == "Read/heroes/ancestries.md"
+                                               and self._read_section_is_wode(soup, el))
             if el.find(True):  # do not flatten headings with permalinks or composite labels
                 children = [n for n in el.contents if isinstance(n, NavigableString) and not isinstance(n, Comment)]
                 if (el.name == "th" and children and
@@ -485,6 +580,31 @@ class Catalog:
         body = soup.body
         return (body.decode_contents() if body else str(soup)), hits
 
+    @staticmethod
+    def _read_section_is_wode(soup, element) -> bool:
+        heading_pattern = re.compile(r"^h[1-6]$")
+        current_title = normalized(element.get("data-sc-original") or element.get_text(" ", strip=True)).casefold()
+        # The chapter overview is outside ancestry h2 sections. Only this
+        # explicitly labelled paragraph belongs to Wode; lookup still requires
+        # the complete approved name + summary source to match exactly.
+        if element.name == "p" and current_title.startswith("wode elf: "):
+            return True
+        if heading_pattern.fullmatch(element.name or "") and ("wode elf" in current_title or "wode elves" in current_title):
+            return True
+        node = element.find_previous(heading_pattern)
+        while node:
+            title = normalized(node.get("data-sc-original") or node.get_text(" ", strip=True)).casefold()
+            if node.name == "h5" and title == "wode elf names":
+                return True
+            # Read uses one h2 boundary per ancestry, then h3/h4 headings for
+            # stories and individual traits. Looking only at the nearest heading
+            # silently disables Wode translations below headings like "Swift".
+            if node.name == "h2":
+                section_id = node.get("data-scc", "")
+                return section_id == "mcdm.heroes.v1/ancestry/wode-elf" or title == "wode elf"
+            node = node.find_previous(heading_pattern)
+        return False
+
     def translate_markdown(self, source: str, uri: str, scc: str = "") -> str:
         """Export content uses the same approved block/link matcher as visible cards.
 
@@ -492,7 +612,21 @@ class Catalog:
         unchanged, including numbers, tables, destinations and formatting.
         """
         output = []
-        for part in re.split(r"(\n\s*\n)", source):
+        parts = re.split(r"(\n\s*\n)", source)
+        if uri in {"Browse/ancestry/wode-elf.md", "Read/heroes/ancestries.md"}:
+            merged = []
+            index = 0
+            while index < len(parts):
+                if (index + 2 < len(parts) and parts[index].strip() and parts[index + 2].strip()
+                        and normalized(plain(parts[index])).startswith('"You say? Well,')
+                        and normalized(plain(parts[index + 2])).startswith("Llyander turned and marched off.")):
+                    merged.append(parts[index] + parts[index + 1] + parts[index + 2])
+                    index += 3
+                else:
+                    merged.append(parts[index])
+                    index += 1
+            parts = merged
+        for part in parts:
             if not part.strip():
                 output.append(part)
                 continue
@@ -579,6 +713,7 @@ class Catalog:
             "Quick Build: Dragon Breath, Prismatic Scales." if dragon_knight else
             "Quick Build: Grounded, Spark Off Your Skin." if "Grounded, Spark Off Your Skin." in source else
             "Quick Build: Beast Legs, Impressive Horns." if "Beast Legs, Impressive Horns." in source else
+            "Quick Build: Swift, Otherworldly Grace." if "Swift, Otherworldly Grace." in source else
             "Quick Build: Perseverance, Staying Power."
         )
         intro = self.lookup(intro_source, uri, scc)
@@ -682,6 +817,27 @@ class Catalog:
             if (record_id.startswith("heroes.ancestries.dwarf.on-dwarves.paragraph.")
                     and dwarf_self_link and text.casefold() in {"dwarf", "dwarves", "dwarf's", "dwarves'"}):
                 translated = self.lookup("Dwarf", uri, scc, label=True)
+            if (record_id == "heroes.ancestries.wode-elf.ability.the-wode-defends.distance"
+                    and text.casefold() == "ranged"
+                    and link_path.endswith("/rule/combat/ranged")):
+                # The approved formula localizes the range label as 遠程; keep
+                # the authored rule link on that word in all ability surfaces.
+                translated = ("遠程", record_id, "ancestry:wode-elf")
+            if (record_id.startswith("heroes.ancestries.wode-elf.")
+                    and text.casefold() in {"wode elf", "wode elves", "wode elf's", "wode elves'"}
+                    and (anchor["href"] in {".", "./", "wode-elf.md"}
+                         or link_path == "wode-elf" or link_path.endswith("/Browse/ancestry/wode-elf"))):
+                # These user-approved Wode paragraphs use the same Chinese
+                # ancestry name for singular, plural, and possessive source links.
+                translated = self.lookup("Wode Elf", uri, scc, label=True)
+            if (record_id == "heroes.ancestries.wode-elf.on-wode-elves.paragraph.34"
+                    and text.casefold() == "turn" and link_path.endswith("/rule/combat/turn")):
+                # The approved sentence says 依序指向; keep the rule link on
+                # the translated adverb rather than the isolated character 序.
+                translated = ("依序", record_id, "ancestry:wode-elf")
+            if (record_id == "heroes.ancestries.wode-elf.on-wode-elves.paragraph.35"
+                    and text.casefold() in {"test", "tests"} and link_path.endswith("/rule/test/test")):
+                translated = ("考驗", record_id, "ancestry:wode-elf")
             if (record_id == "heroes.ancestries.dwarf.trait.grounded.effect"
                     and text.casefold() == "bonus"
                     and link_path.endswith("/rule/dice/bonuses-and-penalties")):
@@ -736,12 +892,18 @@ class Catalog:
             if (identity in done
                     and not record_id.startswith(("heroes.ancestries.devil.on-devils.paragraph.",
                                                   "heroes.ancestries.dragon-knight.on-dragon-knights.paragraph.",
-                                                  "heroes.ancestries.dwarf.on-dwarves.paragraph."))
+                                                  "heroes.ancestries.dwarf.on-dwarves.paragraph.",
+                                                  "heroes.ancestries.wode-elf.on-wode-elves.paragraph."))
                     and record_id not in {"heroes.ancestries.dwarf.description.2",
                                           "heroes.ancestries.dwarf.description.1",
                                           "heroes.ancestries.dwarf.summary",
+                                          "heroes.ancestries.dragon-knight.summary",
+                                          "heroes.ancestries.wode-elf.summary",
                                           "heroes.ancestries.dwarf.trait.stand-tough.effect",
-                                          "heroes.ancestries.dwarf.trait.spark-off-your-skin.effect"}):
+                                          "heroes.ancestries.dwarf.trait.spark-off-your-skin.effect",
+                                          "heroes.ancestries.wode-elf.description.1",
+                                          "heroes.ancestries.wode-elf.description.2",
+                                          "heroes.ancestries.wode-elf.trait.the-wode-defends.effect"}):
                 continue
             done.add(identity)
             placed = False

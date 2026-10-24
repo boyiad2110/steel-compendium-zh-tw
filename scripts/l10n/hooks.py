@@ -118,11 +118,14 @@ def on_page_content(html, page, config, files):
                     continue
                 for item in items:
                     href = str(item.get("href", ""))
-                    ability = re.fullmatch(r"ability/dragon-knight/(draconian-pride|dragon-breath)/?", href)
+                    ability = re.fullmatch(
+                        r"ability/(dragon-knight/(?:draconian-pride|dragon-breath)|wode-elf/the-wode-defends)/?",
+                        href,
+                    )
                     if ability:
-                        slug = ability.group(1)
-                        item_uri = f"Browse/feature/ability/dragon-knight/{slug}.md"
-                        item_scc = f"mcdm.heroes.v1/feature.ability.dragon-knight/{slug}"
+                        ancestry, slug = ability.group(1).split("/", 1)
+                        item_uri = f"Browse/feature/ability/{ancestry}/{slug}.md"
+                        item_scc = f"mcdm.heroes.v1/feature.ability.{ancestry}/{slug}"
                         for value in [item.get("cost", ""), *item.get("keywords", []),
                                       "Targets", "from", "Lv", "distance"]:
                             if not value:
@@ -135,6 +138,8 @@ def on_page_content(html, page, config, files):
                             if not value:
                                 continue
                             if key == "name":
+                                found, _ = catalog.lookup_label(value, item_uri, item_scc)
+                            elif key == "targets":
                                 found, _ = catalog.lookup_label(value, item_uri, item_scc)
                             else:
                                 found = catalog.lookup(value, item_uri, item_scc)
@@ -150,7 +155,7 @@ def on_page_content(html, page, config, files):
                             translated = re.sub(r"(?<!\*)\b(\d+)\b(?!\*)", r"**\1**", translated)
                             labels[normalized(distance).casefold()] = translated
                         continue
-                    match = re.fullmatch(r"trait/(human|devil|dragon-knight|dwarf)/([a-z0-9-]+)/?", href)
+                    match = re.fullmatch(r"trait/(human|devil|dragon-knight|dwarf|wode-elf)/([a-z0-9-]+)/?", href)
                     if not match:
                         continue
                     ancestry, slug = match.groups()
@@ -160,7 +165,7 @@ def on_page_content(html, page, config, files):
                     translated_name, _ = catalog.lookup_label(name, item_uri, item_scc)
                     if translated_name:
                         labels[normalized(name).casefold()] = translated_name[0]
-                    if ancestry in {"dragon-knight", "dwarf"}:
+                    if ancestry in {"dragon-knight", "dwarf", "wode-elf"}:
                         trait_type = f"{item.get('klass', '')} Trait" if item.get("klass") else "Trait"
                         translated_type, _ = catalog.lookup_label(trait_type, item_uri, item_scc)
                         if not translated_type and item.get("klass"):
@@ -183,11 +188,11 @@ def on_page_content(html, page, config, files):
                             if translated_grant:
                                 labels[normalized(grant_label).casefold()] = translated_grant[0]
                     flavor = item.get("flavor", "")
-                    translated_flavor = catalog.lookup(flavor, item_uri, item_scc)
+                    translated_flavor = catalog.lookup_label(flavor, item_uri, item_scc)[0]
                     if translated_flavor:
                         labels[normalized(flavor).casefold()] = translated_flavor[0]
                     if ((ancestry, slug) in {("human", "detect-the-supernatural"), ("devil", "silver-tongue"),
-                                             ("dwarf", "runic-carving")}):
+                                             ("dwarf", "runic-carving"), ("wode-elf", "wode-elf-glamor")}):
                         item["tag"] = "Signature Trait"
                         signature, _ = catalog.lookup_label(item["tag"], item_uri, item_scc)
                         if signature:
