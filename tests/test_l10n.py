@@ -7,7 +7,7 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts/l10n"))
-from core import Catalog, classify, fingerprint, load_catalog
+from core import Catalog, classify, fingerprint, load_catalog, scope_matches
 from import_master import convert
 
 
@@ -215,7 +215,7 @@ class LocalizationTests(unittest.TestCase):
         translated, hits = Catalog(load_catalog()).translate_html(rendered, uri)
         soup = BeautifulSoup(translated, "lxml")
         records = {r["id"]: r for r in load_catalog()["records"]}
-        for ancestry in ("dwarf", "dragon-knight", "wode-elf"):
+        for ancestry in ("dwarf", "dragon-knight", "wode-elf", "high-elf"):
             with self.subTest(ancestry=ancestry):
                 summary_id = f"heroes.ancestries.{ancestry}.summary"
                 name = records[f"heroes.ancestries.{ancestry}.name"]
@@ -230,7 +230,6 @@ class LocalizationTests(unittest.TestCase):
                 self.assertEqual("".join(match.get_text(" ", strip=True).split()),
                                  "".join((name["target"] + "：" + record["target"]).split()))
                 self.assertNotIn({"record": summary_id, "state": "link-adaptation-required"}, hits)
-        self.assertIsNone(soup.select_one('p[data-sc-l10n="heroes.ancestries.high-elf.summary"]'))
 
     def test_dwarf_markdown_export_uses_snapshot_and_preserves_authored_links(self):
         import markdown
@@ -317,11 +316,11 @@ class LocalizationTests(unittest.TestCase):
         soup = BeautifulSoup(translated, "html.parser")
         items = json.loads(soup.select_one("script.sc-browse-data").string)
         dwarves = [item for item in items if item.get("href", "").startswith("trait/dwarf/")]
-        labels = json.loads(soup.select_one("template#sc-l10n-labels")["data-labels"])
+        labels = json.loads(soup.select_one("template#sc-l10n-labels")["data-context-labels"])["dwarf"]
         self.assertEqual(len(dwarves), 7)
         self.assertEqual(labels["dwarf trait"], "矮人特性")
         self.assertEqual(labels["2 options"], "2 個選項")
-        self.assertEqual(labels["level"], "等級")
+        self.assertNotIn("1 point", json.loads(soup.select_one("template#sc-l10n-labels")["data-labels"]))
         names = {item["name"]: item.get("tag") for item in dwarves}
         self.assertEqual(names["Signature Trait: Runic Carving"], "Signature Trait")
         self.assertEqual(names["Great Fortitude"], "2 Points")
@@ -345,7 +344,7 @@ class LocalizationTests(unittest.TestCase):
             translated = hooks.on_page_content(html, page, None, None)
         soup = BeautifulSoup(translated, "html.parser")
         items = json.loads(soup.select_one("script.sc-browse-data").string)
-        labels = json.loads(soup.select_one("template#sc-l10n-labels")["data-labels"])
+        labels = json.loads(soup.select_one("template#sc-l10n-labels")["data-context-labels"])["wode-elf"]
         wode_traits = [item for item in items if item.get("href", "").startswith("trait/wode-elf/")]
         ability = next(item for item in items if item.get("href") == "ability/wode-elf/the-wode-defends/")
         self.assertEqual(len(wode_traits), 8)
@@ -360,6 +359,117 @@ class LocalizationTests(unittest.TestCase):
                          "你獲得以下招牌招式。招牌招式可以隨意使用。")
         self.assertEqual(labels["signature"], "招牌")
         self.assertEqual(labels["ranged **10**"], "遠程 **10**")
+
+    def test_dynamic_trait_labels_remain_scoped_to_their_ancestry(self):
+        import markdown
+        import json
+        from types import SimpleNamespace
+        import hooks
+        root = Path(__file__).resolve().parents[1]
+        cat = Catalog(load_catalog())
+        uri = "Browse/feature/index.md"
+        source = (root / "docs" / uri).read_text(encoding="utf-8")
+        html = markdown.markdown(source, extensions=["tables"])
+        page = SimpleNamespace(file=SimpleNamespace(src_uri=uri), meta={}, title="",
+                               toc=SimpleNamespace(items=[]), url="Browse/feature/")
+        with patch.object(hooks, "catalog", cat), patch.object(hooks, "pages", []):
+            translated = hooks.on_page_content(html, page, None, None)
+        soup = BeautifulSoup(translated, "html.parser")
+        all_labels = json.loads(soup.select_one("template#sc-l10n-labels")["data-labels"])
+        scoped = json.loads(soup.select_one("template#sc-l10n-labels")["data-context-labels"])
+        self.assertNotIn("1 point", all_labels)
+        self.assertEqual(scoped["wode-elf"]["1 point"], "1 費")
+        self.assertEqual(scoped["dwarf"]["1 point"], "1 費")
+        self.assertEqual(scoped["high-elf"]["1 point"], "1 費")
+        self.assertEqual(scoped["high-elf"]["signature trait"], "招牌特性")
+        self.assertEqual(scoped["high-elf"]["2 options"], "2 個選項")
+
+    def test_high_elf_static_trait_index_and_independent_trait_pages(self):
+        import markdown
+        from collections import Counter
+        root = Path(__file__).resolve().parents[1]
+        cat = Catalog(load_catalog())
+        folder_uri = "Browse/feature/trait/index.md"
+        folder_source = (root / "docs" / folder_uri).read_text(encoding="utf-8")
+        folder_html = markdown.markdown(folder_source, extensions=["tables"])
+        folder_translated, folder_hits = cat.translate_html(folder_html, folder_uri)
+        folder_soup = BeautifulSoup(folder_translated, "html.parser")
+        high_elf_folder = folder_soup.select_one('.sc-folder[href="high-elf/"] .sc-folder__name')
+        self.assertEqual(high_elf_folder.get_text(" ", strip=True), "高等精靈")
+        self.assertTrue(high_elf_folder.get("data-sc-l10n"))
+        index_uri = "Browse/feature/trait/high-elf/index.md"
+        index_source = (root / "docs" / index_uri).read_text(encoding="utf-8")
+        index_html, _ = cat.translate_html(markdown.markdown(index_source, extensions=["tables"]), index_uri)
+        cards = BeautifulSoup(index_html, "html.parser").select(".sc-prev")
+        self.assertEqual(len(cards), 8)
+        names = [card.select_one(".sc-head__left-primary").get_text(" ", strip=True) for card in cards]
+        self.assertEqual(names, ["恐怖魅術", "優雅撤離", "招牌特性：高等精靈魅術", "高等精靈特性",
+                                 "敏銳感官", "非凡優雅", "重溫記憶", "頑強心智"])
+        overview = next(card for card in cards if card.get("href", "").endswith("high-elf-traits/"))
+        self.assertEqual(overview.select_one(".sc-prev__grant").get_text(" ", strip=True), "2 個選項")
+
+        collection_uri = "Browse/feature/trait/high-elf/high-elf-traits.md"
+        collection_source = (root / "docs" / collection_uri).read_text(encoding="utf-8")
+        collection_html = markdown.markdown(collection_source.split("---", 2)[-1], extensions=["tables", "attr_list"])
+        collection_translated, collection_hits = cat.translate_html(collection_html, collection_uri)
+        collection_soup = BeautifulSoup(collection_translated, "html.parser")
+        leadin = collection_soup.select(".sc-trait__leadin")[1]
+        self.assertIsNotNone(leadin.select_one(".sc-trait__dia"))
+        self.assertIn("你有 3 點族裔點數，可以用來購買以下特性。", leadin.get_text(" ", strip=True))
+        self.assertIn("速選：敏銳感官、非凡優雅。", "".join(leadin.stripped_strings))
+        self.assertNotIn("You have 3 ancestry points", leadin.get_text(" ", strip=True))
+        self.assertNotIn("Quick Build", leadin.get_text(" ", strip=True))
+        self.assertEqual(collection_soup.select_one(".sc-trait__leadin em").get_text(strip=True), "速選：")
+        self.assertTrue(any(hit["record"] == "heroes.ancestries.high-elf.purchased.intro" for hit in collection_hits))
+        self.assertTrue(any(hit["record"] == "heroes.ancestries.high-elf.quick-build" for hit in collection_hits))
+
+        expected_effects = {
+            "glamor-of-terror": "heroes.ancestries.high-elf.trait.glamor-of-terror.effect",
+            "graceful-retreat": "heroes.ancestries.high-elf.trait.graceful-retreat.effect",
+            "high-senses": "heroes.ancestries.high-elf.trait.high-senses.effect",
+            "otherworldly-grace": "heroes.ancestries.high-elf.trait.otherworldly-grace.effect",
+            "revisit-memory": "heroes.ancestries.high-elf.trait.revisit-memory.effect",
+            "unstoppable-mind": "heroes.ancestries.high-elf.trait.unstoppable-mind.effect",
+        }
+        for slug, record_id in expected_effects.items():
+            with self.subTest(slug=slug):
+                uri = f"Browse/feature/trait/high-elf/{slug}.md"
+                source = (root / "docs" / uri).read_text(encoding="utf-8")
+                rendered = markdown.markdown(source.split("---", 2)[-1], extensions=["tables", "attr_list"])
+                translated, hits = cat.translate_html(rendered, uri)
+                states = {(hit["record"], hit["state"]) for hit in hits}
+                self.assertIn((record_id, "translated"), states)
+                if slug == "graceful-retreat":
+                    text = BeautifulSoup(translated, "html.parser").get_text(" ", strip=True)
+                    self.assertIn("+1", text)
+                    self.assertIn("距離", text)
+                    self.assertIn("撤離", text)
+                    self.assertNotIn("You gain", text)
+                else:
+                    self.assertNotIn("You gain ", BeautifulSoup(translated, "html.parser").get_text(" ", strip=True))
+                self.assertEqual(Counter(a["href"] for a in BeautifulSoup(rendered, "html.parser").select("a[href]")),
+                                 Counter(a["href"] for a in BeautifulSoup(translated, "html.parser").select("a[href]")))
+
+    def test_high_elf_story_browse_and_read_sources_have_matching_blocks_and_link_targets(self):
+        import markdown
+        import posixpath
+        root = Path(__file__).resolve().parents[1]
+        parsed = []
+        for uri, heading in (("Browse/ancestry/high-elf.md", "## On High Elves"),
+                             ("Read/heroes/ancestries.md", "### On High Elves")):
+            source = (root / "docs" / uri).read_text(encoding="utf-8")
+            story = source.split(heading, 1)[1].split("## High Elf Traits", 1)[0]
+            rendered = markdown.markdown(story, extensions=["tables", "attr_list"])
+            soup = BeautifulSoup(rendered, "html.parser")
+            paragraphs = [p for p in soup.select("p") if p.get_text(" ", strip=True) != '{data-search-exclude=""}']
+            blocks = [" ".join(p.get_text(" ", strip=True).split()) for p in paragraphs]
+            links = [(a.get_text(" ", strip=True),
+                      posixpath.normpath(posixpath.join(posixpath.dirname(uri), a["href"])))
+                     for a in soup.select("a[href]")]
+            parsed.append((blocks, links))
+        self.assertEqual(len(parsed[0][0]), 32)
+        self.assertEqual(parsed[0][0], parsed[1][0])
+        self.assertEqual(parsed[0][1], parsed[1][1])
 
     def test_wode_final_story_and_name_copy_match_real_browse_and_read_sources(self):
         import markdown
@@ -459,6 +569,88 @@ class LocalizationTests(unittest.TestCase):
         high_elf = next(h for h in wode_section.find_all_next("h2"))
         high_elf_copy = high_elf.find_next("p")
         self.assertFalse(cat._read_section_is_wode(soup, high_elf_copy))
+
+    def test_high_elf_approved_blocks_match_real_sources_and_stay_in_scope(self):
+        import markdown
+        import re
+        from collections import Counter
+        root = Path(__file__).resolve().parents[1]
+        cat = Catalog(load_catalog())
+
+        def add_mkdocs_headerlinks(rendered):
+            soup = BeautifulSoup(rendered, "html.parser")
+            for heading in soup.select("h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]"):
+                link = soup.new_tag("a", href=f"#{heading['id']}")
+                link["class"] = ["headerlink"]
+                link.string = "¶"
+                heading.append(link)
+            return str(soup)
+
+        expected = {
+            r["id"] for r in cat.data["records"]
+            if r.get("scope") == "ancestry:high-elf" and r.get("id", "").startswith("heroes.ancestries.high-elf.")
+        }
+        self.assertEqual(len(expected), 58)
+        link_adaptation = "heroes.ancestries.high-elf.trait.graceful-retreat.effect"
+        expected_translated = expected
+        self.assertTrue(scope_matches("ancestry:high-elf", "Browse/ancestry/index.md"))
+        browse = (root / "docs/Browse/ancestry/high-elf.md").read_text(encoding="utf-8")
+        browse_intro = browse.split("---", 2)[-1].split("## On High Elves", 1)[0]
+        rendered = add_mkdocs_headerlinks(markdown.markdown(browse_intro, extensions=["tables", "attr_list"]))
+        # MkDocs rewrites ancestry self-links before the hook sees the page.
+        rendered = rendered.replace('href="high-elf.md"', 'href="./"')
+        browse_html, browse_hits = cat.translate_html(rendered, "Browse/ancestry/high-elf.md")
+        browse_ids = {h["record"] for h in browse_hits if h["state"] == "translated"}
+        self.assertTrue({"heroes.ancestries.high-elf.name", "heroes.ancestries.high-elf.description.1",
+                         "heroes.ancestries.high-elf.description.2"}.issubset(browse_ids))
+        source_soup = BeautifulSoup(rendered, "html.parser")
+        translated_soup = BeautifulSoup(browse_html, "html.parser")
+        self.assertEqual(Counter(a["href"] for a in source_soup.select("a[href]")),
+                         Counter(a["href"] for a in translated_soup.select("a[href]")))
+        self.assertFalse(any(h["state"] == "link-adaptation-required" for h in browse_hits))
+
+        browse_body = browse.split("---", 2)[-1]
+        rendered_full = add_mkdocs_headerlinks(markdown.markdown(browse_body, extensions=["tables", "attr_list"]))
+        browse_full_html, browse_full_hits = cat.translate_html(rendered_full, "Browse/ancestry/high-elf.md")
+        browse_full_states = {(h["record"], h["state"]) for h in browse_full_hits}
+        browse_expected = expected_translated - {
+            "heroes.ancestries.high-elf.summary",
+            "heroes.ancestries.high-elf.names.heading",
+            "heroes.ancestries.high-elf.names.description",
+        }
+        self.assertTrue({(record_id, "translated") for record_id in browse_expected}.issubset(browse_full_states))
+        self.assertIn((link_adaptation, "translated"), browse_full_states)
+        self.assertIn(("heroes.ancestries.high-elf.on-high-elves.title", "translated"), browse_full_states)
+        self.assertIn("招牌特性：高等精靈魅術", BeautifulSoup(browse_full_html, "html.parser").get_text(" ", strip=True))
+
+        read = (root / "docs/Read/heroes/ancestries.md").read_text(encoding="utf-8")
+        rendered_read = add_mkdocs_headerlinks(markdown.markdown(read, extensions=["tables", "attr_list"]))
+        read_html, read_hits = cat.translate_html(rendered_read, "Read/heroes/ancestries.md")
+        read_ids = {h["record"] for h in read_hits if h["state"] == "translated"}
+        read_expected = expected_translated - {"heroes.ancestries.high-elf.signature.high-elf-glamor.name"}
+        self.assertTrue(read_expected.issubset(read_ids))
+        read_soup = BeautifulSoup(read_html, "html.parser")
+        read_text = read_soup.get_text(" ", strip=True)
+        self.assertIn("高等精靈魅術", read_text)
+        self.assertNotIn("High Elf Glamor", read_text)
+        high_elf_names = next(h for h in read_soup.select("h5")
+                              if h.get("data-sc-original") == "High Elf Names")
+        examples_label = high_elf_names.find_next("strong")
+        self.assertEqual(examples_label.get("data-sc-l10n"), "ui.high-elf.names.examples")
+        self.assertEqual(examples_label.get_text(strip=True), "範例：")
+        self.assertIn("The Anticipation of a Sigh Upon His Lips", examples_label.parent.get_text(" ", strip=True))
+        high_elf_heading = next(h for h in read_soup.select("h2")
+                                if h.get("data-scc") == "mcdm.heroes.v1/ancestry/high-elf")
+        wode_heading = next(h for h in read_soup.select("h2")
+                            if h.get("data-scc") == "mcdm.heroes.v1/ancestry/wode-elf")
+        for element in read_soup.select('[data-sc-l10n^="heroes.ancestries.high-elf."]'):
+            self.assertTrue(cat._read_section_is_high_elf(read_soup, element), element.get("data-sc-l10n"))
+        self.assertFalse(cat._read_section_is_high_elf(read_soup, wode_heading.find_next("p")))
+        self.assertTrue(cat._read_section_is_high_elf(read_soup, high_elf_heading.find_next("p")))
+        self.assertTrue(any(e.name == "td" and e.get("data-sc-l10n") == "heroes.ancestries.high-elf.name"
+                            for e in read_soup.select('[data-sc-l10n="heroes.ancestries.high-elf.name"]')))
+        read_states = {(h["record"], h["state"]) for h in read_hits if h["record"] in expected}
+        self.assertIn((link_adaptation, "translated"), read_states)
 
     def test_wode_complete_ability_page_uses_approved_results_and_keeps_links(self):
         import markdown
@@ -583,7 +775,8 @@ class LocalizationTests(unittest.TestCase):
             translated = hooks.on_page_content(html, page, None, None)
         result = BeautifulSoup(translated, "html.parser")
         data = json.loads(result.select_one("script.sc-browse-data").string)
-        labels = json.loads(result.select_one("template#sc-l10n-labels")["data-labels"])
+        global_labels = json.loads(result.select_one("template#sc-l10n-labels")["data-labels"])
+        labels = json.loads(result.select_one("template#sc-l10n-labels")["data-context-labels"])["dragon-knight"]
         self.assertEqual(data[0]["tag"], "2 Points")
         self.assertEqual(labels["draconian pride"], "龍人霸氣")
         self.assertEqual(labels["dragon knight trait"], "龍騎士特性")
@@ -599,7 +792,7 @@ class LocalizationTests(unittest.TestCase):
         self.assertEqual(labels["targets"], "目標")
         self.assertEqual(labels["**3** cube within **1**"], "**1** 格內 **3** 立方")
         self.assertEqual(labels["each enemy in the area"], "區域內每個敵人")
-        self.assertEqual(labels["level"], "等級")
+        self.assertEqual(global_labels["level"], "等級")
         self.assertIn("狂怒", labels[normalized(ability["flavor"]).casefold()])
         flavor_key = normalized(item["flavor"]).casefold()
         approved_flavor = cat.lookup(item["flavor"], "Browse/feature/trait/dragon-knight/draconian-pride.md",

@@ -100,6 +100,10 @@ def on_page_content(html, page, config, files):
                        "record": owner.get("data-sc-l10n") if owner else None})
     # Browser helpers receive approved, unambiguous exact labels only. No runtime Sheet access.
     labels = {}
+    context_labels = {}
+
+    def add_context_label(context, source, target):
+        context_labels.setdefault(context, {})[normalized(source).casefold()] = target
     if priority != "P4":
         for key in catalog.labels:
             found = catalog.lookup(key, uri, scc, label=True)
@@ -126,13 +130,18 @@ def on_page_content(html, page, config, files):
                         ancestry, slug = ability.group(1).split("/", 1)
                         item_uri = f"Browse/feature/ability/{ancestry}/{slug}.md"
                         item_scc = f"mcdm.heroes.v1/feature.ability.{ancestry}/{slug}"
+                        klass = item.get("klass", "")
+                        if klass:
+                            class_label, _ = catalog.lookup_label(klass, item_uri, item_scc)
+                            if class_label:
+                                add_context_label(ancestry, klass, class_label[0])
                         for value in [item.get("cost", ""), *item.get("keywords", []),
                                       "Targets", "from", "Lv", "distance"]:
                             if not value:
                                 continue
                             found = catalog.lookup(value, item_uri, item_scc, label=True)
                             if found:
-                                labels[normalized(value).casefold()] = found[0]
+                                add_context_label(ancestry, value, found[0])
                         for key in ("name", "flavor", "targets"):
                             value = item.get(key, "")
                             if not value:
@@ -144,7 +153,7 @@ def on_page_content(html, page, config, files):
                             else:
                                 found = catalog.lookup(value, item_uri, item_scc)
                             if found:
-                                labels[normalized(value).casefold()] = found[0]
+                                add_context_label(ancestry, value, found[0])
                         distance = item.get("distance", "")
                         formula = plain(distance) if distance else ""
                         found = catalog.lookup(formula, item_uri, item_scc) if formula else None
@@ -153,19 +162,24 @@ def on_page_content(html, page, config, files):
                             # approved formula reorders its components.
                             translated = found[0]
                             translated = re.sub(r"(?<!\*)\b(\d+)\b(?!\*)", r"**\1**", translated)
-                            labels[normalized(distance).casefold()] = translated
+                            add_context_label(ancestry, distance, translated)
                         continue
-                    match = re.fullmatch(r"trait/(human|devil|dragon-knight|dwarf|wode-elf)/([a-z0-9-]+)/?", href)
+                    match = re.fullmatch(r"trait/(human|devil|dragon-knight|dwarf|wode-elf|high-elf)/([a-z0-9-]+)/?", href)
                     if not match:
                         continue
                     ancestry, slug = match.groups()
                     item_uri = f"Browse/feature/trait/{ancestry}/{slug}.md"
                     item_scc = f"mcdm.heroes.v1/feature.trait.{ancestry}/{slug}"
+                    klass = item.get("klass", "")
+                    if klass:
+                        class_label, _ = catalog.lookup_label(klass, item_uri, item_scc)
+                        if class_label:
+                            add_context_label(ancestry, klass, class_label[0])
                     name = item.get("name", "")
                     translated_name, _ = catalog.lookup_label(name, item_uri, item_scc)
                     if translated_name:
-                        labels[normalized(name).casefold()] = translated_name[0]
-                    if ancestry in {"dragon-knight", "dwarf", "wode-elf"}:
+                        add_context_label(ancestry, name, translated_name[0])
+                    if ancestry in {"dragon-knight", "dwarf", "wode-elf", "high-elf"}:
                         trait_type = f"{item.get('klass', '')} Trait" if item.get("klass") else "Trait"
                         translated_type, _ = catalog.lookup_label(trait_type, item_uri, item_scc)
                         if not translated_type and item.get("klass"):
@@ -174,29 +188,30 @@ def on_page_content(html, page, config, files):
                             if class_label and noun_label:
                                 translated_type = (class_label[0] + noun_label[0], "", "")
                         if translated_type:
-                            labels[normalized(trait_type).casefold()] = translated_type[0]
+                            add_context_label(ancestry, trait_type, translated_type[0])
                         options = item.get("options", 0)
                         if options > 1:
                             option_label = f"{options} options"
                             translated_options, _ = catalog.lookup_label(option_label, item_uri, item_scc)
                             if translated_options:
-                                labels[normalized(option_label).casefold()] = translated_options[0]
+                                add_context_label(ancestry, option_label, translated_options[0])
                         grant = item.get("grants", "")
                         if grant:
                             grant_label = f"Grants {grant}"
                             translated_grant, _ = catalog.lookup_label(grant_label, item_uri, item_scc)
                             if translated_grant:
-                                labels[normalized(grant_label).casefold()] = translated_grant[0]
+                                add_context_label(ancestry, grant_label, translated_grant[0])
                     flavor = item.get("flavor", "")
                     translated_flavor = catalog.lookup_label(flavor, item_uri, item_scc)[0]
                     if translated_flavor:
-                        labels[normalized(flavor).casefold()] = translated_flavor[0]
+                        add_context_label(ancestry, flavor, translated_flavor[0])
                     if ((ancestry, slug) in {("human", "detect-the-supernatural"), ("devil", "silver-tongue"),
-                                             ("dwarf", "runic-carving"), ("wode-elf", "wode-elf-glamor")}):
+                                             ("dwarf", "runic-carving"), ("wode-elf", "wode-elf-glamor"),
+                                             ("high-elf", "high-elf-glamor")}):
                         item["tag"] = "Signature Trait"
                         signature, _ = catalog.lookup_label(item["tag"], item_uri, item_scc)
                         if signature:
-                            labels[normalized(item["tag"]).casefold()] = signature[0]
+                            add_context_label(ancestry, item["tag"], signature[0])
                     else:
                         source_path = ROOT / "docs" / "Browse" / "feature" / "trait" / ancestry / f"{slug}.md"
                         if source_path.is_file():
@@ -207,11 +222,12 @@ def on_page_content(html, page, config, files):
                                     item["tag"] = cost.group(1).strip()
                                     translated_cost, _ = catalog.lookup_label(item["tag"], item_uri, item_scc)
                                     if translated_cost:
-                                        labels[normalized(item["tag"]).casefold()] = translated_cost[0]
+                                        add_context_label(ancestry, item["tag"], translated_cost[0])
                 island.string = json.dumps(items, ensure_ascii=False, separators=(",", ":"))
     island = soup.new_tag("template")
     island["id"] = "sc-l10n-labels"
     island["data-labels"] = json.dumps(labels, ensure_ascii=False, separators=(",", ":"))
+    island["data-context-labels"] = json.dumps(context_labels, ensure_ascii=False, separators=(",", ":"))
     (soup.body or soup).append(island)
     # Export templates above receive the same approved-only transformation at build time.
     pages.append({"path": uri, "url": page.url, "scc": scc, "title": original_title,
