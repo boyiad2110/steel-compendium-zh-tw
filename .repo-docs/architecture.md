@@ -19,7 +19,7 @@ SC Master → 僅擷取核准紀錄 → 候選快照與差異審查 → `l10n/ca
 | [l10n-zh-TW.css](../docs/stylesheets/l10n-zh-TW.css) | 本地繁體中文字型與必要換行 |
 | `docs/javascripts/sc-search-core.js`、`steel-feature-browser.js` | 中英文搜尋與顯示名稱，保留原始篩選鍵 |
 
-B02 延用同一顯示層：魔鬼介紹的標點等價及連結用詞僅綁定已盤點紀錄；交涉技能用途從既有核准紀錄的 13 組平行表格列精確拆出，供分類卡片、獨立頁及匯出共用。族裔索引與交涉技能卡片的新接點限本批適用頁；動態特性瀏覽僅處理人類／魔鬼，不預先啟用其他族裔。
+B02／B03 延用同一顯示層，適配僅綁定已盤點紀錄、語境與目的地，不預先啟用其他批次。共用快照不代表生成 DOM 相同：閱讀章節、族裔內嵌完整卡、獨立特性／招式頁、靜態索引預覽卡與 JavaScript 動態卡各有接點。靜態預覽使用 `sc-prev__chip`／`sc-prev__meta .v`，完整卡使用 `sc-ability__chip`／`sc-ability__cell .v`；動態卡另由 JSON data island 與顯示標籤掛載。擴充元件時須辨識各結構，驗證方式見 [development](development.md)，不能以其中一種已中文推定其他種類同步。
 
 中文設定停用 `roamlinks`：目前生成內容已使用明確 Markdown 連結，該外掛在 Windows 反覆掃描全站造成延遲。上游更新後若重新出現 Wiki 連結，先重新評估，不盲目延用假設。
 
