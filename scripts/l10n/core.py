@@ -20,7 +20,7 @@ from bs4 import BeautifulSoup, Comment, NavigableString
 
 ROOT = Path(__file__).resolve().parents[2]
 BLOCKS = "p,li,td,th,h1,h2,h3,h4,h5,h6,.sc-ability__section-body,.sc-ability__tier .res,.sb__feat-body,.sc-prev__flavor"
-LABELS = "a,h1,h2,h3,h4,h5,h6,.tag,.pre,.l,.sc-head__slot,.sc-prev__tag,.sc-ability__chip,.sc-prev__chip,.sc-ability__cell .v,dt,th"
+LABELS = "a,h1,h2,h3,h4,h5,h6,.tag,.pre,.l,.sc-head__slot,.sc-prev__tag,.sc-prev__grant,.sc-ability__chip,.sc-prev__chip,.sc-ability__cell .v,.sc-card__type,.sc-card__line b,.sc-card__line .hl,dt,th"
 
 
 def is_dragon_knight_ability_context(uri: str) -> bool:
@@ -39,7 +39,7 @@ def normalized(value: str) -> str:
     value = value.replace("\u2019", "'").replace("\u2018", "'").replace("\u00a0", " ")
     value = re.sub(r"\s+", " ", value).strip()
     # Inline Markdown/HTML boundaries may introduce whitespace before punctuation.
-    return re.sub(r"\s+([.,;:!?])", r"\1", value)
+    return re.sub(r"\s+([.,;:!?]|\))", r"\1", value)
 
 
 def typography_key(value: str) -> str:
@@ -114,7 +114,7 @@ def scope_matches(scope: str, uri: str, scc: str = "") -> bool:
     if scope.startswith("ancestry:"):
         slug = scope.split(":", 1)[1]
         return (uri == f"Browse/ancestry/{slug}.md" or f"/{slug}/" in uri
-                or (slug in {"devil", "dragon-knight"} and uri == "Browse/ancestry/index.md"))
+                or (slug in {"devil", "dragon-knight", "dwarf"} and uri == "Browse/ancestry/index.md"))
     if scope.startswith("kit:"):
         slug = scope.split(":", 1)[1]
         return uri == f"Browse/kit/{slug}.md" or f"/{slug}/" in uri or f"/Kits/{slug}-" in uri
@@ -170,8 +170,22 @@ class Catalog:
                 # links, while the rendered paragraph matcher sees their plain text.
                 self.segments[normalized(plain(source))].append((target, record["id"], scope))
                 continue
+            if record["id"].startswith("heroes.ancestries.dwarf.on-dwarves.paragraph."):
+                # Keep short dialogue as paragraph content, scoped to Dwarf pages.
+                # Master text retains authored links; matching uses rendered text.
+                self.segments[normalized(plain(source))].append((target, record["id"], scope))
+                continue
             if record["id"] == "heroes.ancestries.dragon-knight.description.4":
                 self.segments[normalized(source)].append((target, record["id"], scope))
+            if record["id"] == "heroes.ancestries.dwarf.description.2":
+                # MkDocs/ETL renders this approved Book sentence with straight
+                # quotes and a hyphen where the Master retains curly quotes
+                # and an em dash. Register only this exact punctuation variant;
+                # the linked dwarf labels and sentence wording remain exact.
+                source_text = plain(source).replace("—", "-")
+                self.typographic_segments[typography_key(source_text)].append(
+                    (target, record["id"], scope)
+                )
             if record["id"] == "heroes.ancestries.dragon-knight.description.1":
                 # The upstream HTML parser adds a space after the linked label
                 # before this em dash. Keep this exact, punctuation-only alias
@@ -240,6 +254,30 @@ class Catalog:
                 elif "\n" not in src:
                     self.labels[key.casefold()].append((dst, record["id"], scope))
 
+        # The runic options are approved as three separate Book fields, while
+        # steel-etl renders each option label and effect in one paragraph.
+        # Compose only those exact approved fields for Dwarf ancestry contexts.
+        by_id = {record["id"]: record for record in data["records"]}
+        for option in ("detection", "light", "voice"):
+            name = by_id.get(f"heroes.ancestries.dwarf.signature.runic-carving.{option}.name")
+            effect = by_id.get(f"heroes.ancestries.dwarf.signature.runic-carving.{option}.effect")
+            if not name or not effect:
+                continue
+            scope = effect.get("scope") or record_scope(effect)
+            source = f"{name['source']}: {effect['source']}"
+            target = f"**{name['target']}：** {effect['target']}"
+            self.segments[normalized(source)].append((target, effect["id"], scope))
+
+        # Read's ancestry overview combines the approved ancestry name and
+        # summary in one bold-label paragraph, unlike the standalone Browse page.
+        dwarf_name = by_id.get("heroes.ancestries.dwarf.name")
+        dwarf_summary = by_id.get("heroes.ancestries.dwarf.summary")
+        if dwarf_name and dwarf_summary:
+            scope = dwarf_summary.get("scope") or record_scope(dwarf_summary)
+            source = f"{dwarf_name['source']}: {dwarf_summary['source']}"
+            target = f"**{dwarf_name['target']}：** {dwarf_summary['target']}"
+            self.segments[normalized(source)].append((target, dwarf_summary["id"], scope))
+
     def lookup(self, source: str, uri: str, scc: str = "", label: bool = False):
         key = normalized(source)
         choices = (self.labels.get(key.casefold(), []) if label else self.segments.get(key, []))
@@ -280,7 +318,7 @@ class Catalog:
         # Containers first; descendants are not independently replaced afterwards.
         blocks = list(soup.select(BLOCKS))
         if uri == "Browse/ancestry/index.md":
-            blocks += soup.select(".sc-card__flavor")
+            blocks += soup.select(".sc-card__name,.sc-card__flavor")
         elif uri.startswith("Browse/skill/interpersonal/"):
             blocks += soup.select(".sc-card__blurb")
         for el in blocks:
@@ -304,7 +342,9 @@ class Catalog:
                     el.append(child.extract())
                 hits.extend({"record": record_id, "state": "translated"} for record_id in record_ids)
                 continue
-            found = self.lookup(source, uri, scc)
+            found = (self.lookup_label(source, uri, scc)[0]
+                     if el.get("class") and "sc-card__name" in el["class"]
+                     else self.lookup(source, uri, scc))
             if not found:
                 continue
             target, record_id, _ = found
@@ -537,6 +577,7 @@ class Catalog:
                          "Dragon Breath" in source and "Prismatic Scales" in source)
         quick_source = (
             "Quick Build: Dragon Breath, Prismatic Scales." if dragon_knight else
+            "Quick Build: Grounded, Spark Off Your Skin." if "Grounded, Spark Off Your Skin." in source else
             "Quick Build: Beast Legs, Impressive Horns." if "Beast Legs, Impressive Horns." in source else
             "Quick Build: Perseverance, Staying Power."
         )
@@ -573,6 +614,7 @@ class Catalog:
         """Retain every authored link, or leave the whole English block intact."""
         fragment = BeautifulSoup(markdown.markdown(target, extensions=["tables"]), "html.parser")
         done = set()
+        dwarf_intro_self_link = 0
         for anchor in source_el.find_all("a", href=True):
             if "headerlink" in anchor.get("class", []):
                 continue
@@ -617,6 +659,45 @@ class Catalog:
                 if (anchor["href"] in {".", "./"}
                         and text.casefold() in {"dragon knight", "dragon knights", "dragon knight's"}):
                     translated = self.lookup("Dragon Knight", uri, scc, label=True)
+            if (record_id == "heroes.ancestries.dwarf.description.2"
+                    and (anchor["href"] in {".", "./"} or link_path == "dwarf"
+                         or link_path.endswith("/Browse/ancestry/dwarf"))
+                    and text.casefold() in {"dwarf", "dwarves"}):
+                # The approved Book sentence uses a pronoun for its second
+                # linked mention. Map the three authored self-links by position
+                # while keeping the approved target wording unchanged.
+                labels = ("矮人", "他們", "矮人")
+                if dwarf_intro_self_link < len(labels):
+                    translated = (labels[dwarf_intro_self_link], record_id, "ancestry:dwarf")
+                dwarf_intro_self_link += 1
+            dwarf_self_link = (anchor["href"] in {".", "./", "dwarf.md"}
+                               or link_path == "dwarf"
+                               or link_path.endswith("/Browse/ancestry/dwarf"))
+            if (record_id == "heroes.ancestries.dwarf.description.1"
+                    and dwarf_self_link and text.casefold() in {"dwarf", "dwarves", "dwarf's", "dwarves'"}):
+                translated = self.lookup("Dwarf", uri, scc, label=True)
+            if (record_id == "heroes.ancestries.dwarf.summary"
+                    and dwarf_self_link and text.casefold() in {"dwarf", "dwarves", "dwarf's", "dwarves'"}):
+                translated = self.lookup("Dwarf", uri, scc, label=True)
+            if (record_id.startswith("heroes.ancestries.dwarf.on-dwarves.paragraph.")
+                    and dwarf_self_link and text.casefold() in {"dwarf", "dwarves", "dwarf's", "dwarves'"}):
+                translated = self.lookup("Dwarf", uri, scc, label=True)
+            if (record_id == "heroes.ancestries.dwarf.trait.grounded.effect"
+                    and text.casefold() == "bonus"
+                    and link_path.endswith("/rule/dice/bonuses-and-penalties")):
+                translated = ("+1", record_id, "ancestry:dwarf")
+            if (record_id == "heroes.ancestries.dwarf.trait.spark-off-your-skin.effect"
+                    and text.casefold() == "bonus"
+                    and link_path.endswith("/rule/dice/bonuses-and-penalties")):
+                translated = ("+6", record_id, "ancestry:dwarf")
+            if (record_id == "heroes.ancestries.dwarf.signature.runic-carving.light.effect"
+                    and text.casefold() == "turn"
+                    and link_path.endswith("/rule/combat/turn")):
+                translated = ("開啟", record_id, "ancestry:dwarf")
+            if (record_id == "heroes.ancestries.dwarf.on-dwarves.paragraph.46"
+                    and text.casefold() == "troubadour"
+                    and link_path.endswith("/class/troubadour")):
+                translated = ("遊唱家", record_id, "ancestry:dwarf")
             # User-approved Book wording in the human introduction. Rules use 超常.
             if (record_id == "heroes.ancestries.human.description.1"
                     and text.casefold() == "supernatural"
@@ -654,7 +735,13 @@ class Catalog:
             identity = (anchor["href"], label)
             if (identity in done
                     and not record_id.startswith(("heroes.ancestries.devil.on-devils.paragraph.",
-                                                  "heroes.ancestries.dragon-knight.on-dragon-knights.paragraph."))):
+                                                  "heroes.ancestries.dragon-knight.on-dragon-knights.paragraph.",
+                                                  "heroes.ancestries.dwarf.on-dwarves.paragraph."))
+                    and record_id not in {"heroes.ancestries.dwarf.description.2",
+                                          "heroes.ancestries.dwarf.description.1",
+                                          "heroes.ancestries.dwarf.summary",
+                                          "heroes.ancestries.dwarf.trait.stand-tough.effect",
+                                          "heroes.ancestries.dwarf.trait.spark-off-your-skin.effect"}):
                 continue
             done.add(identity)
             placed = False

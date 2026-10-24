@@ -150,7 +150,7 @@ def on_page_content(html, page, config, files):
                             translated = re.sub(r"(?<!\*)\b(\d+)\b(?!\*)", r"**\1**", translated)
                             labels[normalized(distance).casefold()] = translated
                         continue
-                    match = re.fullmatch(r"trait/(human|devil|dragon-knight)/([a-z0-9-]+)/?", href)
+                    match = re.fullmatch(r"trait/(human|devil|dragon-knight|dwarf)/([a-z0-9-]+)/?", href)
                     if not match:
                         continue
                     ancestry, slug = match.groups()
@@ -160,9 +160,14 @@ def on_page_content(html, page, config, files):
                     translated_name, _ = catalog.lookup_label(name, item_uri, item_scc)
                     if translated_name:
                         labels[normalized(name).casefold()] = translated_name[0]
-                    if ancestry == "dragon-knight":
+                    if ancestry in {"dragon-knight", "dwarf"}:
                         trait_type = f"{item.get('klass', '')} Trait" if item.get("klass") else "Trait"
                         translated_type, _ = catalog.lookup_label(trait_type, item_uri, item_scc)
+                        if not translated_type and item.get("klass"):
+                            class_label, _ = catalog.lookup_label(item["klass"], item_uri, item_scc)
+                            noun_label, _ = catalog.lookup_label("Trait", item_uri, item_scc)
+                            if class_label and noun_label:
+                                translated_type = (class_label[0] + noun_label[0], "", "")
                         if translated_type:
                             labels[normalized(trait_type).casefold()] = translated_type[0]
                         options = item.get("options", 0)
@@ -181,7 +186,8 @@ def on_page_content(html, page, config, files):
                     translated_flavor = catalog.lookup(flavor, item_uri, item_scc)
                     if translated_flavor:
                         labels[normalized(flavor).casefold()] = translated_flavor[0]
-                    if (ancestry, slug) in {("human", "detect-the-supernatural"), ("devil", "silver-tongue")}:
+                    if ((ancestry, slug) in {("human", "detect-the-supernatural"), ("devil", "silver-tongue"),
+                                             ("dwarf", "runic-carving")}):
                         item["tag"] = "Signature Trait"
                         signature, _ = catalog.lookup_label(item["tag"], item_uri, item_scc)
                         if signature:
