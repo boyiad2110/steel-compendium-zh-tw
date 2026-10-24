@@ -50,6 +50,281 @@ class LocalizationTests(unittest.TestCase):
             self.assertIn("你有 3 點族裔點數", lead.get_text())
             self.assertEqual(lead.a.get_text(), "龍息")
 
+    def test_dwarf_approved_prose_and_quick_build_match_real_browse_and_read_sources(self):
+        import markdown
+        root = Path(__file__).resolve().parents[1]
+        cat = Catalog(load_catalog())
+        for uri in ("Browse/ancestry/dwarf.md", "Read/heroes/ancestries.md"):
+            source = (root / "docs" / uri).read_text(encoding="utf-8")
+            if uri.startswith("Browse/"):
+                source = source.split("---", 2)[-1]
+            else:
+                start = source.index("## Dwarf {")
+                end = source.index("## Wode Elf {", start)
+                source = source[start:end]
+            html = markdown.markdown(source, extensions=["tables", "attr_list"])
+            # steel-etl resolves same-page Markdown links to ./ in built pages.
+            html = html.replace('href="dwarf.md"', 'href="./"')
+            html = html.replace('href="../../Browse/ancestry/dwarf.md"',
+                                'href="../../Browse/ancestry/dwarf/"')
+            translated, hits = cat.translate_html(html, uri)
+            soup = BeautifulSoup(translated, "html.parser")
+            description_one = soup.select_one('p[data-sc-l10n="heroes.ancestries.dwarf.description.1"]')
+            self.assertIsNotNone(description_one)
+            self.assertEqual(sum(a.get_text(strip=True) == "矮人"
+                                 for a in description_one.select("a[href]")), 2)
+            self.assertIn("矮人雖然體型矮小", description_one.get_text())
+            self.assertNotIn("Possessed of a strength", description_one.get_text())
+            description = soup.select_one('p[data-sc-l10n="heroes.ancestries.dwarf.description.2"]')
+            self.assertIsNotNone(description)
+            self.assertEqual(len(description.select("a")), 3)
+            self.assertEqual([a["href"] for a in description.select("a")],
+                             ["./"] * 3 if uri.startswith("Browse/") else
+                             ["../../Browse/ancestry/dwarf/"] * 3)
+            self.assertEqual([a.get_text() for a in description.select("a")], ["矮人", "他們", "矮人"])
+            expected = next(r["target"] for r in cat.data["records"]
+                            if r["id"] == "heroes.ancestries.dwarf.description.2")
+            compact = lambda text: "".join(text.split())
+            self.assertEqual(compact(description.get_text()),
+                             compact(BeautifulSoup(markdown.markdown(expected), "lxml").get_text()))
+            self.assertNotIn({"record": "heroes.ancestries.dwarf.description.2",
+                              "state": "link-adaptation-required"}, hits)
+            story_ids = [p["data-sc-l10n"] for p in soup.select('p[data-sc-l10n^="heroes.ancestries.dwarf.on-dwarves.paragraph."]')]
+            self.assertEqual(story_ids, [
+                f"heroes.ancestries.dwarf.on-dwarves.paragraph.{number:02d}"
+                for number in range(1, 49)
+            ])
+            self.assertFalse(any("The dwarf's head snapped" in p.get_text()
+                                 for p in soup.select("p")))
+            lead = next(p for p in soup.select(".sc-trait__leadin")
+                        if "你有 3 點族裔點數" in p.get_text()
+                        and "腳踏實地" in p.get_text())
+            self.assertIn("速選：", lead.get_text())
+            self.assertIn("腳踏實地、堅硬石膚", lead.get_text())
+            heading = soup.find(["h2", "h3"], string="談矮人")
+            self.assertIsNotNone(heading)
+
+    def test_dwarf_runic_options_translate_in_browse_read_and_standalone_sources(self):
+        import markdown
+        from collections import Counter
+        root = Path(__file__).resolve().parents[1]
+        cat = Catalog(load_catalog())
+        uris = ("Browse/ancestry/dwarf.md", "Browse/feature/trait/dwarf/runic-carving.md",
+                "Read/heroes/ancestries.md")
+        labels = {"detection": "偵測", "light": "照明", "voice": "傳聲"}
+        for uri in uris:
+            source = (root / "docs" / uri).read_text(encoding="utf-8")
+            if uri == "Browse/ancestry/dwarf.md":
+                source = source.split("---", 2)[-1]
+            elif uri == "Read/heroes/ancestries.md":
+                start = source.index("## Dwarf {")
+                end = source.index("## Wode Elf {", start)
+                source = source[start:end]
+            else:
+                source = source.split("---", 2)[-1]
+            rendered = markdown.markdown(source, extensions=["tables", "attr_list"])
+            original = BeautifulSoup(rendered, "lxml")
+            translated, hits = cat.translate_html(rendered, uri)
+            result = BeautifulSoup(translated, "lxml")
+            for option, label in labels.items():
+                record_id = f"heroes.ancestries.dwarf.signature.runic-carving.{option}.effect"
+                prefix = {"detection": "Detection:", "light": "Light:", "voice": "Voice:"}[option]
+                source_block = next(p for p in original.select("p")
+                                    if p.get_text(" ", strip=True).startswith(prefix))
+                match = result.select(f'p[data-sc-l10n="{record_id}"]')
+                self.assertEqual(len(match), 1, (uri, record_id))
+                target = match[0]
+                self.assertEqual(target.find(["b", "strong"]).get_text(strip=True), label + "：")
+                self.assertEqual(Counter(a["href"] for a in target.select("a[href]")),
+                                 Counter(a["href"] for a in source_block.select("a[href]")))
+                expected = next(r["target"] for r in cat.data["records"] if r["id"] == record_id)
+                self.assertEqual("".join(target.get_text(" ", strip=True).split()),
+                                 "".join((label + "：" + expected).split()))
+                self.assertNotIn({"record": record_id, "state": "link-adaptation-required"}, hits)
+
+    def test_dwarf_ancestry_index_card_uses_scoped_name_and_keeps_search_link(self):
+        import markdown
+        root = Path(__file__).resolve().parents[1]
+        uri = "Browse/ancestry/index.md"
+        source = (root / "docs" / uri).read_text(encoding="utf-8")
+        translated, _ = Catalog(load_catalog()).translate_html(
+            markdown.markdown(source, extensions=["tables"]), uri)
+        card = next(c for c in BeautifulSoup(translated, "lxml").select(".sc-card")
+                    if c.select_one(".sc-card__link") and c.select_one(".sc-card__link")["href"] == "dwarf/")
+        self.assertEqual(card.select_one(".sc-card__name").get_text(strip=True), "矮人")
+        self.assertEqual(card.select_one(".sc-card__link")["aria-label"], "Dwarf")
+        flavor = next(r["target"] for r in Catalog(load_catalog()).data["records"]
+                      if r["id"] == "heroes.ancestries.dwarf.description.1")
+        self.assertEqual("".join(card.select_one(".sc-card__flavor").get_text(" ", strip=True).split()),
+                         "".join(flavor.split()))
+        self.assertEqual(card.select_one(".sc-card__type").get_text(strip=True), "族裔")
+        self.assertEqual(card.select_one(".sc-card__line b").get_text(strip=True), "招牌特性")
+        self.assertEqual(card.select_one(".sc-card__line .hl").get_text(strip=True), "符文銘刻")
+        self.assertEqual(card.select_one(".sc-card__link")["href"], "dwarf/")
+
+    def test_dwarf_static_trait_index_cards_translate_fields_and_keep_destinations(self):
+        import markdown
+        root = Path(__file__).resolve().parents[1]
+        uri = "Browse/feature/trait/dwarf/index.md"
+        source = (root / "docs" / uri).read_text(encoding="utf-8")
+        translated, _ = Catalog(load_catalog()).translate_html(
+            markdown.markdown(source, extensions=["tables"]), uri)
+        cards = BeautifulSoup(translated, "lxml").select(".sc-prev")
+        self.assertEqual(len(cards), 7)
+        self.assertEqual([c.select_one(".sc-head__left-eyebrow").get_text(strip=True)
+                          for c in cards], ["特性"] * 7)
+        self.assertEqual([c["href"] for c in cards], [
+            "dwarf-traits/", "great-fortitude/", "grounded/", "runic-carving/",
+            "spark-off-your-skin/", "stand-tough/", "stone-singer/"
+        ])
+        self.assertEqual(cards[0].select_one(".sc-prev__grant").get_text(" ", strip=True), "2 個選項")
+        self.assertTrue(all(not c.select_one(".sc-prev__flavor").get_text().startswith(("Your ", "Dwarf heroes"))
+                            for c in cards))
+
+    def test_dwarf_names_and_measurements_translate_from_real_read_chapter(self):
+        import markdown
+        root = Path(__file__).resolve().parents[1]
+        uri = "Read/heroes/ancestries.md"
+        source = (root / "docs" / uri).read_text(encoding="utf-8")
+        translated, _ = Catalog(load_catalog()).translate_html(
+            markdown.markdown(source, extensions=["tables", "attr_list"]), uri)
+        soup = BeautifulSoup(translated, "lxml")
+        names = soup.find(lambda el: el.name in {"h3", "h4", "h5", "h6"}
+                          and el.get_text(strip=True) == "矮人姓名")
+        self.assertIsNotNone(names)
+        name_categories = names.find_next_siblings("p", limit=3)
+        self.assertEqual([el.select_one("strong").get_text(" ", strip=True) for el in name_categories],
+                         ["女性名：", "中性名：", "男性名："])
+        table = next(t for t in soup.select("table") if "4'0''-4'6''" in t.get_text())
+        headers = table.select("th")
+        self.assertEqual([el.get_text(" ", strip=True) for el in headers],
+                         ["族裔", "身高（呎 / 吋）", "體重（磅）", "預期壽命（年）"])
+        dwarf_row = next(row for row in table.select("tr")
+                         if row.select_one("a") and row.select_one("a").get_text(strip=True) == "矮人")
+        self.assertEqual([cell.get_text(" ", strip=True) for cell in dwarf_row.select("td")],
+                         ["矮人", "4'0''-4'6''", "500-1,000", "700-1,500"])
+
+    def test_dwarf_read_overview_summary_uses_approved_target_and_keeps_links(self):
+        import markdown
+        from collections import Counter
+        root = Path(__file__).resolve().parents[1]
+        uri = "Read/heroes/ancestries.md"
+        source = (root / "docs" / uri).read_text(encoding="utf-8")
+        rendered = markdown.markdown(source, extensions=["tables", "attr_list"])
+        original = BeautifulSoup(rendered, "lxml")
+        translated, hits = Catalog(load_catalog()).translate_html(rendered, uri)
+        soup = BeautifulSoup(translated, "lxml")
+        summary_id = "heroes.ancestries.dwarf.summary"
+        match = soup.select_one(f'p[data-sc-l10n="{summary_id}"]')
+        self.assertIsNotNone(match)
+        source_block = next(p for p in original.select("p")
+                            if "Humanoids with stony skin" in p.get_text())
+        self.assertEqual(Counter(a["href"] for a in match.select("a[href]")),
+                         Counter(a["href"] for a in source_block.select("a[href]")))
+        self.assertEqual([a.get_text(strip=True) for a in match.select("a[href]")],
+                         ["矮人", "矮人", "超常"])
+        record = next(r for r in load_catalog()["records"] if r["id"] == summary_id)
+        self.assertEqual("".join(match.get_text(" ", strip=True).split()),
+                         "".join(("矮人：" + record["target"]).split()))
+        self.assertNotIn({"record": summary_id, "state": "link-adaptation-required"}, hits)
+
+    def test_dwarf_markdown_export_uses_snapshot_and_preserves_authored_links(self):
+        import markdown
+        import re
+        from collections import Counter
+        root = Path(__file__).resolve().parents[1]
+        uri = "Browse/ancestry/dwarf.md"
+        source = (root / "docs" / uri).read_text(encoding="utf-8").split("---", 2)[-1]
+        exported = Catalog(load_catalog()).translate_markdown(source, uri)
+        original_html = markdown.markdown(source, extensions=["tables", "attr_list"])
+        exported_html = markdown.markdown(exported, extensions=["tables", "attr_list"])
+        original_links = Counter(a["href"] for a in BeautifulSoup(original_html, "lxml").select("a[href]"))
+        exported_links = Counter(a["href"] for a in BeautifulSoup(exported_html, "lxml").select("a[href]"))
+        self.assertEqual(exported_links, original_links)
+        self.assertIn("\n\n矮人\n\n---", exported)
+        self.assertIn("[遊唱家](../class/troubadour.md)", exported)
+        self.assertNotIn("Dwarves are the children of the elder god Ord", exported)
+        expected = [r["target"] for r in Catalog(load_catalog()).data["records"]
+                    if r["id"].startswith("heroes.ancestries.dwarf.on-dwarves.paragraph.")]
+        content = markdown.markdown(exported, extensions=["tables", "attr_list"])
+        paragraphs = [p.get_text(" ", strip=True) for p in BeautifulSoup(content, "lxml").select("p")]
+        compact = lambda text: re.sub(r"\s", "", text)
+        for target in expected:
+            target_text = BeautifulSoup(markdown.markdown(target), "lxml").get_text(" ", strip=True)
+            self.assertIn(compact(target_text), [compact(p) for p in paragraphs])
+
+    def test_dwarf_purchased_trait_links_retain_book_master_wording(self):
+        import markdown
+        import re
+        from collections import Counter
+        root = Path(__file__).resolve().parents[1]
+        cat = Catalog(load_catalog())
+        cases = {
+            "heroes.ancestries.dwarf.trait.grounded.effect": ["穩度", "+1"],
+            "heroes.ancestries.dwarf.trait.spark-off-your-skin.effect": ["體力", "+6", "+6"],
+        }
+        for uri in ("Browse/ancestry/dwarf.md", "Browse/feature/trait/dwarf/grounded.md",
+                    "Browse/feature/trait/dwarf/spark-off-your-skin.md", "Read/heroes/ancestries.md"):
+            source = (root / "docs" / uri).read_text(encoding="utf-8")
+            if uri.startswith("Browse/"):
+                source = source.split("---", 2)[-1]
+            else:
+                start = source.index("## Dwarf {")
+                end = source.index("## Wode Elf {", start)
+                source = source[start:end]
+            rendered = markdown.markdown(source, extensions=["tables"])
+            translated, hits = cat.translate_html(rendered, uri)
+            original_soup = BeautifulSoup(rendered, "lxml")
+            soup = BeautifulSoup(translated, "lxml")
+            for record_id, labels in cases.items():
+                matches = soup.select(f'[data-sc-l10n="{record_id}"]')
+                source_blocks = original_soup.select("p")
+                source_prefix = ("Your heavy stone body" if record_id.endswith("grounded.effect")
+                                 else "Your stone skin affords you")
+                source_block = next((p for p in source_blocks
+                                     if p.get_text(" ", strip=True).startswith(source_prefix)), None)
+                if source_block is None:
+                    self.assertFalse(matches, (uri, record_id))
+                    continue
+                self.assertEqual(len(matches), 1, (uri, record_id))
+                result = matches[0]
+                self.assertEqual([a.get_text() for a in result.select("a")], labels)
+                self.assertEqual(Counter(a["href"] for a in result.select("a[href]")),
+                                 Counter(a["href"] for a in source_block.select("a[href]")))
+                self.assertEqual(re.sub(r"\s", "", result.get_text(" ", strip=True)),
+                                 re.sub(r"\s", "", next(r["target"] for r in cat.data["records"]
+                                                          if r["id"] == record_id)))
+                self.assertNotIn({"record": record_id, "state": "link-adaptation-required"}, hits)
+
+    def test_dwarf_dynamic_trait_cards_use_approved_name_type_cost_and_options_labels(self):
+        import markdown
+        import json
+        from types import SimpleNamespace
+        import hooks
+        root = Path(__file__).resolve().parents[1]
+        cat = Catalog(load_catalog())
+        uri = "Browse/feature/index.md"
+        source = (root / "docs" / uri).read_text(encoding="utf-8")
+        html = markdown.markdown(source, extensions=["tables"])
+        page = SimpleNamespace(file=SimpleNamespace(src_uri=uri), meta={}, title="",
+                               toc=SimpleNamespace(items=[]), url="Browse/feature/")
+        with patch.object(hooks, "catalog", cat), patch.object(hooks, "pages", []):
+            translated = hooks.on_page_content(html, page, None, None)
+        soup = BeautifulSoup(translated, "html.parser")
+        items = json.loads(soup.select_one("script.sc-browse-data").string)
+        dwarves = [item for item in items if item.get("href", "").startswith("trait/dwarf/")]
+        labels = json.loads(soup.select_one("template#sc-l10n-labels")["data-labels"])
+        self.assertEqual(len(dwarves), 7)
+        self.assertEqual(labels["dwarf trait"], "矮人特性")
+        self.assertEqual(labels["2 options"], "2 個選項")
+        self.assertEqual(labels["level"], "等級")
+        names = {item["name"]: item.get("tag") for item in dwarves}
+        self.assertEqual(names["Signature Trait: Runic Carving"], "Signature Trait")
+        self.assertEqual(names["Great Fortitude"], "2 Points")
+        self.assertEqual(names["Grounded"], "1 Point")
+        self.assertIn("grounded", labels)
+        self.assertIn("堅硬石膚", labels["spark off your skin"])
+
     def test_localized_card_fields_keep_inline_markup(self):
         cat = Catalog(load_catalog())
         source = ('<div class="sc-ability__cell"><div class="v">1 burst</div></div>'
@@ -264,7 +539,7 @@ class LocalizationTests(unittest.TestCase):
         self.assertEqual(table.h3.get_text(), "龍騎士姓名")
         self.assertEqual([x.get_text(" ", strip=True) for x in table.select("strong")], ["女性名：", "中性名：", "男性名："])
         self.assertEqual([x.get_text(" ", strip=True) for x in table.select("th")], [
-            "族裔", "身高（英尺／英吋）", "體重（磅）", "預期壽命（年）"
+            "族裔", "身高（呎 / 吋）", "體重（磅）", "預期壽命（年）"
         ])
 
         leadin = ('<p>You have 3 ancestry points to spend on the following traits. '
@@ -313,6 +588,44 @@ class LocalizationTests(unittest.TestCase):
             again, again_hits = cat.translate_html(html, uri)
             self.assertEqual([str(n) for n in BeautifulSoup(again, 'lxml').select('h2,p,hr')],
                              [str(n) for n in soup.select('h2,p,hr')])
+            self.assertEqual(again_hits, [])
+
+    def test_dwarf_story_real_browse_and_read_sources_keep_user_final_and_links(self):
+        import markdown
+        import re
+        from collections import Counter
+        root = Path(__file__).resolve().parents[1]
+        cat = Catalog(load_catalog())
+        expected = {r['id']: r for r in cat.data['records']
+                    if r['id'].startswith('heroes.ancestries.dwarf.on-dwarves.')}
+        self.assertEqual(len(expected), 49)
+        for uri in ['Browse/ancestry/dwarf.md', 'Read/heroes/ancestries.md']:
+            source = (root / 'docs' / uri).read_text(encoding='utf8')
+            heading_match = re.search(r'^#{2,3} On Dwarves[^\n]*$', source, flags=re.M)
+            self.assertIsNotNone(heading_match)
+            heading = heading_match.group(0)
+            story = re.split(r'^#{2,3} On Dwarves[^\n]*\n\n', source, maxsplit=1, flags=re.M)[1]
+            story = re.split(r'^#{2,3} Dwarf Traits[^\n]*\n', story, maxsplit=1, flags=re.M)[0]
+            rendered = markdown.markdown(heading + "\n\n" + story, extensions=["attr_list"])
+            html, hits = cat.translate_html(rendered, uri)
+            soup = BeautifulSoup(html, 'lxml')
+            translated_ids = {h['record'] for h in hits if h['state'] == 'translated'}
+            self.assertEqual(set(expected), translated_ids)
+            self.assertEqual(len(soup.select('p[data-sc-l10n]')), 48)
+            title = soup.select_one('h2,h3')
+            self.assertEqual(title.get_text(), '談矮人')
+            self.assertFalse(any(h['state'] == 'link-adaptation-required' for h in hits))
+            self.assertEqual(Counter(a['href'] for a in soup.select('a[href]')),
+                             Counter(a['href'] for a in BeautifulSoup(rendered, 'lxml').select('a[href]')))
+            self.assertEqual(soup.select_one('a[href$="/class/troubadour.md"]').get_text(), '遊唱家')
+            for p in soup.select('p[data-sc-l10n]'):
+                target = expected[p['data-sc-l10n']]['target']
+                compact = lambda text: re.sub(r'\s', '', text)
+                target_text = BeautifulSoup(markdown.markdown(target), 'lxml').get_text()
+                self.assertEqual(compact(p.get_text()), compact(target_text))
+            again, again_hits = cat.translate_html(html, uri)
+            self.assertEqual([str(n) for n in BeautifulSoup(again, 'lxml').select('h2,h3,p')],
+                             [str(n) for n in soup.select('h2,h3,p')])
             self.assertEqual(again_hits, [])
 
     def test_approved_on_humans_story_all_paragraphs_and_narrative_links(self):
