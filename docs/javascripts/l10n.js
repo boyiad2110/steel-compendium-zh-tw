@@ -1,17 +1,27 @@
 /* Idempotent on Material document$ swaps. No observer over user-authored content. */
 (function () {
   "use strict";
-  let previous = null, labels = {};
+  let previous = null, labels = {}, contextLabels = {};
   function currentLabels() {
     const island = document.getElementById("sc-l10n-labels");
     if (island !== previous) {
       previous = island;
-      try { labels = JSON.parse(island ? island.getAttribute("data-labels") || "{}" : "{}"); } catch (_) { labels = {}; }
+      try {
+        labels = JSON.parse(island ? island.getAttribute("data-labels") || "{}" : "{}");
+        contextLabels = JSON.parse(island ? island.getAttribute("data-context-labels") || "{}" : "{}");
+      } catch (_) { labels = {}; contextLabels = {}; }
     }
     return labels;
   }
   window.SCL10n = {
-    label: function (s) { return window.SCL10nCore.label(s, currentLabels()); },
+    label: function (s, context) {
+      currentLabels();
+      const scoped = context && contextLabels[context];
+      const key = window.SCL10nCore.key(s);
+      return scoped && Object.prototype.hasOwnProperty.call(scoped, key)
+        ? scoped[key]
+        : window.SCL10nCore.label(s, currentLabels());
+    },
     original: window.SCL10nCore.original
   };
   function init() {

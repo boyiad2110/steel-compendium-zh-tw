@@ -57,7 +57,11 @@
     });
   }
   // Display-only lookup. Item IDs, facet values and source JSON stay English.
-  function display(s) { return window.SCL10n ? window.SCL10n.label(s) : s; }
+  function ancestryContext(it) {
+    var match = String(it && it.href || "").match(/^(?:trait|ability)\/([a-z0-9-]+)\//);
+    return match ? match[1] : "";
+  }
+  function display(s, context) { return window.SCL10n ? window.SCL10n.label(s, context) : s; }
   // minimal **bold** for distance values ("Melee **1**")
   function md(s) { return esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>"); }
   function ordinal(n) { return n + (["th", "st", "nd", "rd"][(n % 100 - 20) % 10] || ["th", "st", "nd", "rd"][n % 100] || "th"); }
@@ -72,15 +76,16 @@
     // level lives in the tag, so the eyebrow carries "<Source> <noun> · <subclass?>".
     // The noun reflects the real type: "Trait" only for ancestry/monster traits,
     // "Feature" for the plain feature umbrella.
+    var context = ancestryContext(it);
     var noun = it.kind === "feature" ? "Feature" : "Trait";
-    var eyebrow = esc(display(it.klass ? it.klass + " " + noun : noun));
+    var eyebrow = esc(display(it.klass ? it.klass + " " + noun : noun, context));
     if (it.subclass) eyebrow += " · " + esc(it.subclass);
     var tag = it.tag
-      ? '<div class="sc-prev__tag">' + esc(display(it.tag)) + '</div>'
-      : '<div class="sc-prev__tag">' + esc(display("Level")) + ' <span class="num">' + esc(it.level) + '</span></div>';
+      ? '<div class="sc-prev__tag">' + esc(display(it.tag, context)) + '</div>'
+      : '<div class="sc-prev__tag">' + esc(display("Level", context)) + ' <span class="num">' + esc(it.level) + '</span></div>';
     var marker = "";
-    if (it.grants) marker = esc(display("Grants " + it.grants));
-    else if (it.options > 1) marker = esc(display(it.options + " options"));
+    if (it.grants) marker = esc(display("Grants " + it.grants, context));
+    else if (it.options > 1) marker = esc(display(it.options + " options", context));
     else if (it.options === 1) marker = "1 option";
     var foot = marker
       ? '<div class="sc-prev__foot"><span class="sc-prev__grant"><span class="dot"></span>' + marker + "</span></div>"
@@ -90,43 +95,44 @@
         '<span class="sc-crest sc-prev__crest"><span class="sc-prev__glyph">' + esc(ACTIONS.trait.glyph) + '</span></span>' +
         '<div class="sc-prev__titles">' +
           '<div class="sc-prev__eyebrow"><span class="sc-prev__dia"></span>' + eyebrow + '</div>' +
-          '<h3 class="sc-prev__name">' + esc(display(it.name)) + '</h3></div>' + tag + '</div>' +
-      (it.flavor ? '<div class="sc-prev__flavor">' + esc(display(it.flavor)) + '</div>' : "") +
+          '<h3 class="sc-prev__name">' + esc(display(it.name, context)) + '</h3></div>' + tag + '</div>' +
+      (it.flavor ? '<div class="sc-prev__flavor">' + esc(display(it.flavor, context)) + '</div>' : "") +
       foot + '</a>';
   }
 
   function abilityCard(it, ctx) {
+    var context = ancestryContext(it);
     var act = it.action || "main";
     var a = ACTIONS[act] || ACTIONS.main;
     var cost = it.cost || "";
     var costHTML = /^\d/.test(cost)
       ? cost.replace(/^(\d+)\s*/, '<span class="num">$1</span> ')
-      : esc(display(cost));
+      : esc(display(cost, context));
     var tag = cost ? '<div class="sc-prev__tag">' + costHTML + '</div>' : "";
     // keyword chips, then condition chips (SC-90) — a card filtered to "prone"
     // shows on its face why it matched. Mirrors renderAbilityPrev in
     // steel-etl/internal/site/feature_index.go; keep the two in step.
     var chips = (it.keywords || []).map(function (k) {
-      return '<span class="sc-prev__chip">' + esc(display(k)) + '</span>';
+      return '<span class="sc-prev__chip">' + esc(display(k, context)) + '</span>';
     }).concat((it.conditions || []).map(function (c) {
-      return '<span class="sc-prev__chip sc-prev__chip--cond">' + esc(display(c)) + '</span>';
+      return '<span class="sc-prev__chip sc-prev__chip--cond">' + esc(display(c, context)) + '</span>';
     }));
     var kw = chips.length ? '<div class="sc-prev__kw">' + chips.join("") + '</div>' : "";
     var foot = [];
-    if (ctx) foot.push(metaCell(display("from"), esc(display(it.klass)) + " · " + display("Lv") + " " + it.level, true));
-    if (it.distance) foot.push(metaCell(display("distance"), md(display(it.distance)), true));
-    if (it.targets) foot.push(metaCell(display("targets"), display(it.targets)));
+    if (ctx) foot.push(metaCell(display("from", context), esc(display(it.klass, context)) + " · " + display("Lv", context) + " " + it.level, true));
+    if (it.distance) foot.push(metaCell(display("distance", context), md(display(it.distance, context)), true));
+    if (it.targets) foot.push(metaCell(display("targets", context), display(it.targets, context)));
     var footHTML = foot.length ? '<div class="sc-prev__foot">' + foot.join("") + "</div>" : "";
     // Subclass rides the action eyebrow ("Maneuver · Black Ash"), matching the
     // trait card — abilities otherwise never surface their subclass.
-    var eyebrow = esc(display(a.label)) + (it.subclass ? " · " + esc(display(it.subclass)) : "");
+    var eyebrow = esc(display(a.label, context)) + (it.subclass ? " · " + esc(display(it.subclass, context)) : "");
     return '<a class="sc-prev sc-prev--ability sc-fil" data-action="' + esc(act) + '" href="' + esc(it.href || "#") + '">' +
       '<div class="sc-prev__head">' +
         '<span class="sc-crest sc-prev__crest"><span class="sc-prev__glyph">' + esc(a.glyph) + '</span></span>' +
         '<div class="sc-prev__titles">' +
           '<div class="sc-prev__eyebrow"><span class="sc-prev__dia"></span>' + eyebrow + '</div>' +
-          '<h3 class="sc-prev__name">' + esc(display(it.name)) + '</h3></div>' + tag + '</div>' +
-      (it.flavor ? '<div class="sc-prev__flavor">' + esc(display(it.flavor)) + '</div>' : "") +
+          '<h3 class="sc-prev__name">' + esc(display(it.name, context)) + '</h3></div>' + tag + '</div>' +
+      (it.flavor ? '<div class="sc-prev__flavor">' + esc(display(it.flavor, context)) + '</div>' : "") +
       kw + footHTML + '</a>';
   }
 
@@ -269,7 +275,9 @@
 
     function matches(it) {
       if (state.q) {
-        var hay = (it.name + " " + display(it.name) + " " + (it.flavor || "") + " " + (it.keywords || []).join(" ") + " " + (it.keywords || []).map(display).join(" ")).toLowerCase();
+        var context = ancestryContext(it);
+        var hay = (it.name + " " + display(it.name, context) + " " + (it.flavor || "") + " " +
+          (it.keywords || []).join(" ") + " " + (it.keywords || []).map(function (value) { return display(value, context); }).join(" ")).toLowerCase();
         if (hay.indexOf(state.q) === -1) return false;
       }
       for (var k in state.sel) {

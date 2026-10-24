@@ -1,6 +1,6 @@
 # 中文化專案治理入口
 
-更新日期：2026-10-23。這裡管理 `boyiad2110/steel-compendium-zh-tw`，不是上游 `SteelCompendium/v2` 的工作區。
+更新日期：2026-10-25。這裡管理 `boyiad2110/steel-compendium-zh-tw`，不是上游 `SteelCompendium/v2` 的工作區。
 
 ## 依任務讀取
 

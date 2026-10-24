@@ -119,7 +119,7 @@ def scope_matches(scope: str, uri: str, scc: str = "") -> bool:
     if scope.startswith("ancestry:"):
         slug = scope.split(":", 1)[1]
         return (uri == f"Browse/ancestry/{slug}.md" or f"/{slug}/" in uri
-                or (slug in {"devil", "dragon-knight", "dwarf", "wode-elf"}
+                or (slug in {"devil", "dragon-knight", "dwarf", "wode-elf", "high-elf"}
                     and uri == "Browse/ancestry/index.md"))
     if scope.startswith("kit:"):
         slug = scope.split(":", 1)[1]
@@ -295,7 +295,7 @@ class Catalog:
 
         # Read's ancestry overview combines the approved ancestry name and
         # summary in one bold-label paragraph, unlike the standalone Browse page.
-        for ancestry in ("dwarf", "dragon-knight", "wode-elf"):
+        for ancestry in ("dwarf", "dragon-knight", "wode-elf", "high-elf"):
             name = by_id.get(f"heroes.ancestries.{ancestry}.name")
             summary = by_id.get(f"heroes.ancestries.{ancestry}.summary")
             if name and summary:
@@ -312,7 +312,14 @@ class Catalog:
         allowed = [x for x in choices if scope_matches(x[2], uri, scc)
                    and not (uri == "Read/heroes/ancestries.md"
                             and x[1].startswith(("heroes.ancestries.wode-elf.", "ui.wode-elf."))
-                            and not getattr(self, "_active_read_wode_section", False))]
+                            and not getattr(self, "_active_read_wode_section", False))
+                   and not (uri == "Read/heroes/ancestries.md"
+                            and x[1].startswith(("heroes.ancestries.high-elf.", "ui.high-elf."))
+                            and not getattr(self, "_active_read_high_elf_section", False))
+                   and not (uri == "Read/heroes/ancestries.md"
+                            and getattr(self, "_active_read_high_elf_section", False)
+                            and x[2].startswith("ancestry:")
+                            and not x[2].startswith(("ancestry:high-elf", "ancestry:heroes")))]
         # Conflicting approved translations never resolve by arbitrary row order.
         targets = {x[0] for x in allowed}
         return allowed[0] if len(targets) == 1 else None
@@ -382,11 +389,15 @@ class Catalog:
                 continue
             self._active_read_wode_section = (uri == "Read/heroes/ancestries.md"
                                                and self._read_section_is_wode(soup, el))
+            self._active_read_high_elf_section = (uri == "Read/heroes/ancestries.md"
+                                                  and self._read_section_is_high_elf(soup, el))
             if el.select("table,.sc-ability,.sb-wrap,h1,h2,h3,h4,h5,h6"):
                 continue
             if el.get("class") and "chars" in el["class"]:
                 continue
-            source = normalized(el.get_text(" ", strip=True))
+            # MkDocs adds a visible pilcrow inside heading text before this
+            # hook runs. It is navigation UI, not part of the approved source.
+            source = normalized(el.get_text(" ", strip=True).replace("¶", ""))
             composed = self._ancestry_quick_build(el, source, uri, scc)
             if composed:
                 target, record_ids, rendered = composed
@@ -530,6 +541,9 @@ class Catalog:
             extra_labels = [el for el in soup.select("strong")
                             if normalized(el.get_text(" ", strip=True)) in
                             {"Feminine:", "Gender Neutral:", "Masculine:"}]
+            extra_labels += [el for el in soup.select("strong")
+                             if normalized(el.get_text(" ", strip=True)) == "Examples:"
+                             and self._read_section_is_high_elf(soup, el)]
         for el in list(soup.select(LABELS)) + extra_labels:
             if el.parent is None or el.find_parent(["script", "template", "style", "code", "pre"]):
                 continue
@@ -537,6 +551,8 @@ class Catalog:
                 continue
             self._active_read_wode_section = (uri == "Read/heroes/ancestries.md"
                                                and self._read_section_is_wode(soup, el))
+            self._active_read_high_elf_section = (uri == "Read/heroes/ancestries.md"
+                                                  and self._read_section_is_high_elf(soup, el))
             if el.find(True):  # do not flatten headings with permalinks or composite labels
                 children = [n for n in el.contents if isinstance(n, NavigableString) and not isinstance(n, Comment)]
                 if (el.name == "th" and children and
@@ -583,7 +599,8 @@ class Catalog:
     @staticmethod
     def _read_section_is_wode(soup, element) -> bool:
         heading_pattern = re.compile(r"^h[1-6]$")
-        current_title = normalized(element.get("data-sc-original") or element.get_text(" ", strip=True)).casefold()
+        current_title = normalized((element.get("data-sc-original") or element.get_text(" ", strip=True))
+                                   .replace("¶", "")).casefold()
         # The chapter overview is outside ancestry h2 sections. Only this
         # explicitly labelled paragraph belongs to Wode; lookup still requires
         # the complete approved name + summary source to match exactly.
@@ -602,6 +619,34 @@ class Catalog:
             if node.name == "h2":
                 section_id = node.get("data-scc", "")
                 return section_id == "mcdm.heroes.v1/ancestry/wode-elf" or title == "wode elf"
+            node = node.find_previous(heading_pattern)
+        return False
+
+    @staticmethod
+    def _read_section_is_high_elf(soup, element) -> bool:
+        heading_pattern = re.compile(r"^h[1-6]$")
+        current_title = normalized(element.get("data-sc-original") or element.get_text(" ", strip=True)).casefold()
+        # The chapter overview sits before the ancestry sections. Admit only
+        # the complete, explicitly labelled High Elf name + summary paragraph.
+        if element.name == "p" and current_title.startswith("high elf: "):
+            return True
+        if element.name == "td" and element.parent and element.parent.name == "tr":
+            cells = element.parent.find_all(["td", "th"], recursive=False)
+            if (len(cells) == 4 and normalized(cells[0].get_text(" ", strip=True)).casefold() == "high elf"
+                    and normalized(element.get_text(" ", strip=True)).casefold() == "high elf"
+                    and element.find_parent("table")
+                    and normalized(element.find_parent("table").get_text(" ", strip=True)).casefold().startswith("ancestry height")):
+                return True
+        if heading_pattern.fullmatch(element.name or "") and ("high elf" in current_title or "high elves" in current_title):
+            return True
+        node = element.find_previous(heading_pattern)
+        while node:
+            title = normalized(node.get("data-sc-original") or node.get_text(" ", strip=True)).casefold()
+            if node.name == "h5" and title == "high elf names":
+                return True
+            if node.name == "h2":
+                section_id = node.get("data-scc", "")
+                return section_id == "mcdm.heroes.v1/ancestry/high-elf" or title == "high elf"
             node = node.find_previous(heading_pattern)
         return False
 
@@ -707,10 +752,12 @@ class Catalog:
     def _ancestry_quick_build(self, element, source: str, uri: str, scc: str):
         """Compose reviewed ancestry lead-ins while retaining authored links."""
         intro_source = "You have 3 ancestry points to spend on the following traits."
+        high_elf = uri in {"Browse/ancestry/high-elf.md", "Read/heroes/ancestries.md"} and "High Senses, Otherworldly Grace." in source
         dragon_knight = (uri in {"Browse/ancestry/dragon-knight.md", "Read/heroes/ancestries.md"} and
                          "Dragon Breath" in source and "Prismatic Scales" in source)
         quick_source = (
             "Quick Build: Dragon Breath, Prismatic Scales." if dragon_knight else
+            "Quick Build: High Senses, Otherworldly Grace." if high_elf else
             "Quick Build: Grounded, Spark Off Your Skin." if "Grounded, Spark Off Your Skin." in source else
             "Quick Build: Beast Legs, Impressive Horns." if "Beast Legs, Impressive Horns." in source else
             "Quick Build: Swift, Otherworldly Grace." if "Swift, Otherworldly Grace." in source else
@@ -749,6 +796,8 @@ class Catalog:
         """Retain every authored link, or leave the whole English block intact."""
         fragment = BeautifulSoup(markdown.markdown(target, extensions=["tables"]), "html.parser")
         done = set()
+        preserved_links = [a for a in fragment.find_all("a", href=True)]
+        consumed_preserved_links = set()
         dwarf_intro_self_link = 0
         for anchor in source_el.find_all("a", href=True):
             if "headerlink" in anchor.get("class", []):
@@ -789,6 +838,27 @@ class Catalog:
                     and text == "distance"
                     and link_path.endswith("/rule/combat/distance")):
                 translated = ("距離", "heroes.ancestries.human.trait.cant-take-hold.effect", "ancestry:human")
+            if record_id == "heroes.ancestries.high-elf.trait.graceful-retreat.effect":
+                if text.casefold() == "bonus" and link_path.endswith("/rule/dice/bonuses-and-penalties"):
+                    translated = ("+1", record_id, "ancestry:high-elf")
+                elif text.casefold() == "distance" and link_path.endswith("/rule/combat/distance"):
+                    translated = ("距離", record_id, "ancestry:high-elf")
+                elif text.casefold() == "disengage" and link_path.endswith("/move-actions/disengage"):
+                    translated = ("撤離", record_id, "ancestry:high-elf")
+            if record_id.startswith("heroes.ancestries.high-elf.on-high-elves.paragraph."):
+                if (text.casefold() in {"wode elf", "wode elves"}
+                        and (link_path == "wode-elf" or link_path.endswith("/wode-elf"))):
+                    label = "利楊德" if record_id.endswith("paragraph.23") else "幻林精靈"
+                    translated = (label, record_id, "ancestry:high-elf")
+                elif (text.casefold() in {"high elf", "high elves"}
+                      and (link_path == "high-elf" or link_path.endswith("/high-elf"))):
+                    translated = self.lookup("High Elf", uri, scc, label=True)
+                elif text.casefold() in {"human", "humans"} and (link_path == "human" or link_path.endswith("/human")):
+                    translated = ("人類", record_id, "ancestry:high-elf")
+                elif text.casefold() == "saint" and link_path.endswith("/rule/world/saint"):
+                    translated = ("鐵血聖者", record_id, "ancestry:high-elf")
+                elif text.casefold() == "surprised" and link_path.endswith("/rule/combat/surprised"):
+                    translated = ("沒想到", record_id, "ancestry:high-elf")
             if (record_id in {"heroes.ancestries.dragon-knight.description.1", "heroes.ancestries.dragon-knight.description.3"}
                     or record_id.startswith("heroes.ancestries.dragon-knight.on-dragon-knights.paragraph.")):
                 if (anchor["href"] in {".", "./"}
@@ -893,12 +963,16 @@ class Catalog:
                     and not record_id.startswith(("heroes.ancestries.devil.on-devils.paragraph.",
                                                   "heroes.ancestries.dragon-knight.on-dragon-knights.paragraph.",
                                                   "heroes.ancestries.dwarf.on-dwarves.paragraph.",
-                                                  "heroes.ancestries.wode-elf.on-wode-elves.paragraph."))
+                                                  "heroes.ancestries.wode-elf.on-wode-elves.paragraph.",
+                                                  "heroes.ancestries.high-elf.on-high-elves.paragraph."))
                     and record_id not in {"heroes.ancestries.dwarf.description.2",
                                           "heroes.ancestries.dwarf.description.1",
                                           "heroes.ancestries.dwarf.summary",
                                           "heroes.ancestries.dragon-knight.summary",
                                           "heroes.ancestries.wode-elf.summary",
+                                          "heroes.ancestries.high-elf.summary",
+                                          "heroes.ancestries.high-elf.description.1",
+                                          "heroes.ancestries.high-elf.description.2",
                                           "heroes.ancestries.dwarf.trait.stand-tough.effect",
                                           "heroes.ancestries.dwarf.trait.spark-off-your-skin.effect",
                                           "heroes.ancestries.wode-elf.description.1",
@@ -906,6 +980,13 @@ class Catalog:
                                           "heroes.ancestries.wode-elf.trait.the-wode-defends.effect"}):
                 continue
             done.add(identity)
+            preserved = next((a for a in preserved_links
+                              if id(a) not in consumed_preserved_links
+                              and normalized(a.get_text(" ", strip=True)) == normalized(label)), None)
+            if preserved is not None:
+                preserved["href"] = anchor["href"]
+                consumed_preserved_links.add(id(preserved))
+                continue
             placed = False
             for node in list(fragment.find_all(string=True)):
                 if node.find_parent("a"):
