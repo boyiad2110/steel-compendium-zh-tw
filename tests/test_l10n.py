@@ -382,6 +382,7 @@ class LocalizationTests(unittest.TestCase):
         self.assertEqual(scoped["dwarf"]["1 point"], "1 費")
         self.assertEqual(scoped["high-elf"]["1 point"], "1 費")
         self.assertEqual(scoped["high-elf"]["signature trait"], "招牌特性")
+        self.assertNotIn("2 options", scoped["high-elf"])
 
     def test_high_elf_static_trait_index_and_independent_trait_pages(self):
         import markdown
@@ -396,6 +397,8 @@ class LocalizationTests(unittest.TestCase):
         names = [card.select_one(".sc-head__left-primary").get_text(" ", strip=True) for card in cards]
         self.assertEqual(names, ["恐怖魅術", "優雅撤離", "招牌特性：高等精靈魅術", "高等精靈特性",
                                  "敏銳感官", "非凡優雅", "重溫記憶", "頑強心智"])
+        overview = next(card for card in cards if card.get("href", "").endswith("high-elf-traits/"))
+        self.assertEqual(overview.select_one(".sc-prev__grant").get_text(" ", strip=True), "2 options")
 
         expected_effects = {
             "glamor-of-terror": "heroes.ancestries.high-elf.trait.glamor-of-terror.effect",
