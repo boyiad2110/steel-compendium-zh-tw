@@ -295,13 +295,14 @@ class Catalog:
 
         # Read's ancestry overview combines the approved ancestry name and
         # summary in one bold-label paragraph, unlike the standalone Browse page.
-        dwarf_name = by_id.get("heroes.ancestries.dwarf.name")
-        dwarf_summary = by_id.get("heroes.ancestries.dwarf.summary")
-        if dwarf_name and dwarf_summary:
-            scope = dwarf_summary.get("scope") or record_scope(dwarf_summary)
-            source = f"{dwarf_name['source']}: {dwarf_summary['source']}"
-            target = f"**{dwarf_name['target']}：** {dwarf_summary['target']}"
-            self.segments[normalized(source)].append((target, dwarf_summary["id"], scope))
+        for ancestry in ("dwarf", "dragon-knight", "wode-elf"):
+            name = by_id.get(f"heroes.ancestries.{ancestry}.name")
+            summary = by_id.get(f"heroes.ancestries.{ancestry}.summary")
+            if name and summary:
+                scope = summary.get("scope") or record_scope(summary)
+                source = f"{name['source']}: {summary['source']}"
+                target = f"**{name['target']}：** {summary['target']}"
+                self.segments[normalized(source)].append((target, summary["id"], scope))
 
     def lookup(self, source: str, uri: str, scc: str = "", label: bool = False):
         key = normalized(source)
@@ -493,7 +494,7 @@ class Catalog:
                     value.append(child.extract())
                 hits.append({"record": record_id, "state": "translated"})
         if is_wode_ability_context(uri):
-            for value in soup.select(".sc-ability__cell .v, .sc-prev--ability .sc-prev__meta .v"):
+            for value in soup.select(".sc-ability__cell .v, .sc-prev--ability .sc-prev__meta .v, .sc-ability__pr-head .chars"):
                 if uri == "Read/heroes/ancestries.md":
                     self._active_read_wode_section = self._read_section_is_wode(soup, value)
                 source = normalized(value.get_text(" ", strip=True))
@@ -583,6 +584,11 @@ class Catalog:
     def _read_section_is_wode(soup, element) -> bool:
         heading_pattern = re.compile(r"^h[1-6]$")
         current_title = normalized(element.get("data-sc-original") or element.get_text(" ", strip=True)).casefold()
+        # The chapter overview is outside ancestry h2 sections. Only this
+        # explicitly labelled paragraph belongs to Wode; lookup still requires
+        # the complete approved name + summary source to match exactly.
+        if element.name == "p" and current_title.startswith("wode elf: "):
+            return True
         if heading_pattern.fullmatch(element.name or "") and ("wode elf" in current_title or "wode elves" in current_title):
             return True
         node = element.find_previous(heading_pattern)
@@ -891,6 +897,8 @@ class Catalog:
                     and record_id not in {"heroes.ancestries.dwarf.description.2",
                                           "heroes.ancestries.dwarf.description.1",
                                           "heroes.ancestries.dwarf.summary",
+                                          "heroes.ancestries.dragon-knight.summary",
+                                          "heroes.ancestries.wode-elf.summary",
                                           "heroes.ancestries.dwarf.trait.stand-tough.effect",
                                           "heroes.ancestries.dwarf.trait.spark-off-your-skin.effect",
                                           "heroes.ancestries.wode-elf.description.1",

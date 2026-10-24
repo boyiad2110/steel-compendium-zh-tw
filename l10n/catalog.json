@@ -8,11 +8,16 @@
   "master": {
     "spreadsheetId": "1RvYstzyZWqQfXDPnTwQUscSd-UJZK6uCFEOVg0Q931c",
     "url": "https://docs.google.com/spreadsheets/d/1RvYstzyZWqQfXDPnTwQUscSd-UJZK6uCFEOVg0Q931c/edit",
-    "approvedRecords": 1934,
+    "approvedRecords": 1935,
     "bookVersion": "1.01b",
     "readbackVerified": true,
     "modifiedTime": "2026-10-24T05:27:25.302Z",
-    "captureNote": "Approved-only SC Master readback; Records through row 1875 and UI through row 71; B05 story/name/ability and scoped UI; 1934 approved records."
+    "captureNote": "Approved-only SC Master readback; Records through row 1875 and UI through row 71; B05 story/name/ability and scoped UI; 1934 approved records. B05 correction: approved characteristic formula read back from UI!A72:L72.",
+    "deltaReadback": {
+      "range": "UI!A72:L72",
+      "verified": true,
+      "capturedAt": "2026-10-24T07:16:55.816916+00:00"
+    }
   },
   "records": [
     {
@@ -29023,6 +29028,21 @@
       "reference": "Heroes 1.01b / Wode Elf Traits / The Wode Defends / Distance",
       "bookVersion": "1.01b",
       "context": "User final text approved 2026-10-24; SC Master only; approved grouping follows the submitted paragraph layout and authored links are retained.",
+      "approvalBasis": "Independent Master APPROVED"
+    },
+    {
+      "id": "ui.wode-elf.power-roll.characteristics",
+      "kind": "ui",
+      "source": "Might or Agility",
+      "target": "力量或敏捷",
+      "status": "APPROVED",
+      "scope": "ancestry:wode-elf",
+      "sourceHash": "b59a8925db9b8a7765713072589db404973bc4d24cf0711a4c87ec5f2853b6e2",
+      "sourceRecordId": "",
+      "sourceSheetId": "",
+      "reference": "Steel Compendium UI — B05; user-approved 2026-10-24",
+      "bookVersion": "",
+      "context": "Approved B05 full formula: Power Roll + Might or Agility → 檢定 + 力量或敏捷; characteristics display only; preserve original calculation data and links.",
       "approvalBasis": "Independent Master APPROVED"
     }
   ]

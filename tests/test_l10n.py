@@ -204,7 +204,7 @@ class LocalizationTests(unittest.TestCase):
         self.assertEqual([cell.get_text(" ", strip=True) for cell in dwarf_row.select("td")],
                          ["矮人", "4'0''-4'6''", "500-1,000", "700-1,500"])
 
-    def test_dwarf_read_overview_summary_uses_approved_target_and_keeps_links(self):
+    def test_approved_read_overview_summaries_keep_all_links(self):
         import markdown
         from collections import Counter
         root = Path(__file__).resolve().parents[1]
@@ -214,19 +214,23 @@ class LocalizationTests(unittest.TestCase):
         original = BeautifulSoup(rendered, "lxml")
         translated, hits = Catalog(load_catalog()).translate_html(rendered, uri)
         soup = BeautifulSoup(translated, "lxml")
-        summary_id = "heroes.ancestries.dwarf.summary"
-        match = soup.select_one(f'p[data-sc-l10n="{summary_id}"]')
-        self.assertIsNotNone(match)
-        source_block = next(p for p in original.select("p")
-                            if "Humanoids with stony skin" in p.get_text())
-        self.assertEqual(Counter(a["href"] for a in match.select("a[href]")),
-                         Counter(a["href"] for a in source_block.select("a[href]")))
-        self.assertEqual([a.get_text(strip=True) for a in match.select("a[href]")],
-                         ["矮人", "矮人", "超常"])
-        record = next(r for r in load_catalog()["records"] if r["id"] == summary_id)
-        self.assertEqual("".join(match.get_text(" ", strip=True).split()),
-                         "".join(("矮人：" + record["target"]).split()))
-        self.assertNotIn({"record": summary_id, "state": "link-adaptation-required"}, hits)
+        records = {r["id"]: r for r in load_catalog()["records"]}
+        for ancestry in ("dwarf", "dragon-knight", "wode-elf"):
+            with self.subTest(ancestry=ancestry):
+                summary_id = f"heroes.ancestries.{ancestry}.summary"
+                name = records[f"heroes.ancestries.{ancestry}.name"]
+                record = records[summary_id]
+                match = soup.select_one(f'p[data-sc-l10n="{summary_id}"]')
+                self.assertIsNotNone(match)
+                source_block = next(p for p in original.select("p")
+                                    if p.find("strong")
+                                    and p.find("strong").get_text(strip=True) == name["source"] + ":")
+                self.assertEqual(Counter(a["href"] for a in match.select("a[href]")),
+                                 Counter(a["href"] for a in source_block.select("a[href]")))
+                self.assertEqual("".join(match.get_text(" ", strip=True).split()),
+                                 "".join((name["target"] + "：" + record["target"]).split()))
+                self.assertNotIn({"record": summary_id, "state": "link-adaptation-required"}, hits)
+        self.assertIsNone(soup.select_one('p[data-sc-l10n="heroes.ancestries.high-elf.summary"]'))
 
     def test_dwarf_markdown_export_uses_snapshot_and_preserves_authored_links(self):
         import markdown
@@ -475,6 +479,10 @@ class LocalizationTests(unittest.TestCase):
         values = [cell.select_one(".v") for cell in soup.select(".sc-ability__cell")]
         self.assertEqual("".join(values[0].get_text(" ", strip=True).split()), "遠程10")
         self.assertEqual("".join(values[1].get_text(" ", strip=True).split()), "1個生物")
+        chars = soup.select_one(".sc-ability__pr-head .chars")
+        self.assertEqual("".join(chars.get_text(" ", strip=True).split()), "力量或敏捷")
+        self.assertIsNone(chars.find("p"))
+        self.assertEqual([a.get_text(strip=True) for a in chars.select("a")], ["力量", "敏捷"])
         self.assertIn("招牌", soup.select_one(".sc-head__right-primary").get_text(" ", strip=True))
         self.assertEqual(Counter(a["href"] for a in soup.select("a[href]")),
                          Counter(a["href"] for a in source_soup.select("a[href]")))
